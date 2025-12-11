@@ -1,0 +1,33 @@
+---
+title: "Jacobsville_data"
+author: "Barra Peak"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE) # knitting instructions for markdown file
+library(openxlsx) # read in and export microsoft excel files
+library(dplyr) # easier datatable handling
+library(tidyverse) # for easier datatable handling
+library(stringr) # for easier character data handling
+```
+
+## R Markdown Description
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document.
+
+This markdown document collates all U-Pb and (U-Th)/He reduced data, cleans the data, and packages it in data tables for reading by humans and to be used in data visualization.
+
+```{r import data files, echo = F}
+upb_data <- read.xlsx("/Users/barrapeak/Dropbox/Thermo-Detrital/Data/U_Pb_all_2024_06_17.xlsx", "Data_All", check.names = T) # load U-Pb data
+
+
+```
+
+```{r clean individual tables, check for names match, echo = F}
+
+```
+
