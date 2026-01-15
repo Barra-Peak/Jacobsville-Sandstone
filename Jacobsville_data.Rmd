@@ -11,6 +11,7 @@ library(openxlsx) # read in and export microsoft excel files
 library(dplyr) # easier datatable handling
 library(tidyverse) # for easier datatable handling
 library(stringr) # for easier character data handling
+library(tibble) # for easier datatable rearranging
 ```
 
 ## R Markdown Description
@@ -22,12 +23,419 @@ When you click the **Knit** button a document will be generated that includes bo
 This markdown document collates all U-Pb and (U-Th)/He reduced data, cleans the data, and packages it in data tables for reading by humans and to be used in data visualization.
 
 ```{r import data files, echo = F}
-upb_data <- read.xlsx("/Users/barrapeak/Dropbox/Thermo-Detrital/Data/U_Pb_all_2024_06_17.xlsx", "Data_All", check.names = T) # load U-Pb data
+# load U-Pb data from run 1
+upb_data_1 <- read.xlsx("/Users/barrapeak/Dropbox/Thermo-Detrital/Data/U_Pb_all_2024_06_17.xlsx", "Data_1", startRow = 1, fillMergedCells = T, check.names = T) %>% 
+  mutate(Run = "1") %>%
+  drop_na(Final.Pb207.U235_mean)
+# load U-Pb data from run 2
+upb_data_2 <- read.xlsx("/Users/barrapeak/Dropbox/Thermo-Detrital/Data/U_Pb_all_2024_06_17.xlsx", "Data_2", startRow = 1, fillMergedCells = T, check.names = T) %>% 
+  mutate(Run = "2") %>%
+  drop_na(Final.Pb207.U235_mean)
+# load U-Pb data from run 3
+upb_data_3 <- read.xlsx("/Users/barrapeak/Dropbox/Thermo-Detrital/Data/U_Pb_all_2024_06_17.xlsx", "Data_3", startRow = 1, fillMergedCells = T, check.names = T) %>% 
+  mutate(Run = "3") %>%
+  drop_na(Final.Pb207.U235_mean)
+
+# load helium analytical data
+he_input_data <- read.xlsx("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Data/jacobsvilleall_values.xlsx", startRow = 1, colNames = TRUE, check.names = TRUE, sep.names = "_") # load data using full file path. this file is just input and measured data, no dates
+
+he_nmol <- read.xlsx("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Data/jacobsvillehelcalc_input_file.xlsx", startRow = 1, colNames = TRUE, check.names = TRUE, sep.names = ".") # load hecalc input values for date calculation
 
 
 ```
 
-```{r clean individual tables, check for names match, echo = F}
+```{r clean U-Pb table, echo = F}
+upb_data_all <- full_join(upb_data_1, upb_data_2) %>%
+  full_join(upb_data_3)
+
+suppressWarnings(upb_clean <- upb_data_all %>%
+  filter(str_detect(X1, "HF") == F) %>%
+  select(c(Run, X1, Final.U.Th_mean, Final.U.Th_2SE.int.,
+          Final.U238.Pb206_mean, Final.U238.Pb206_2SE.int.,
+          Final.Pb207.U235_mean, Final.Pb207.U235_2SE.int.,
+          rho.207Pb.206Pb.v.238U.206Pb,
+          Final.Pb207.U235_mean, Final.Pb207.U235_2SE.int.,
+          Final.Pb206.U238_mean, Final.Pb206.U238_2SE.int.,
+          rho.206Pb.238U.v.207Pb.235U,
+          Final.Pb208.Th232_mean, Final.Pb208.Th232_2SE.int.,
+          Final.Pb207.Pb206.age_mean, Final.Pb207.Pb206.age_2SE.int.,
+          Final.Pb206.U238.age_mean, Final.Pb206.U238.age_2SE.int.,
+          Final.Pb207.U235.age_mean, Final.Pb207.U235.age_2SE.int.,
+          Final.Pb208.Th232.age_mean, Final.Pb208.Th232.age_2SE.int.)) %>%
+  mutate(across(-c("X1"), as.numeric)) %>%
+  mutate(Concordance = (Final.Pb206.U238.age_mean/Final.Pb207.Pb206.age_mean)*100) %>%
+  add_column("Pb206.Pb204" = "NA", .after = 4) %>%
+  add_column("Pb206.Pb204_2SE" = "NA", .after = 5) %>%
+  add_column("Pb208.Pb206" = "NA", .after = 11) %>%
+  add_column("Pb208.Pb206_2SE" = "NA", .after = 12) %>%
+  mutate(Spot.Size = case_when(Run == 1 ~ 30,
+                                     .default = 50), .after = 2) %>%
+  mutate(Fluence = case_when(Run == 1 ~ 3,
+                                     .default = 2.8), .after = 3) %>%
+  mutate(Rep.Rate = case_when(Run == 1 ~ 10,
+                                     .default = 7), .after = 4) %>%
+  mutate(Sample = case_when(str_starts(X1, "BP") == T ~ "BP22-02", 
+                                  str_starts(X1, "91500") == T ~ "91500",
+                                  str_starts(X1, "Tem") == T ~ "Temora-2",
+                                  str_starts(X1, "R") == T ~ "RAK-17",
+                                  str_starts(X1, "NIST 610") == T ~ "NIST-610",
+                                  .default = NA), .after = 2) %>% # extract sample name from full sample spot name
+  mutate(Grain = case_when(str_detect(X1, "_") == T ~ as.numeric(str_extract(X1, "[^_]+$")),
+         .default = as.numeric(str_extract(X1, "[^- ]+$"))), .after = 3) %>%
+  select(!c("X1")) %>% # extract spot number from full sample spot name
+  mutate(Sample = factor(Sample, levels = c("BP22-02", "91500", "Temora-2", "RAK-17", "NIST-610"))) %>% # factor sample so table orders correctly
+  group_by(Run, Sample) %>%
+  arrange(Run, Sample, Grain, .by_group = T))
+```
+```{r clean and combine He tables, echo = F}
+# problem with referencing dates are all wrong in output tables
+he_input_units <- he_input_data[1, ]
+he_input_data <- he_input_data[-1, ] # remove unit row
+
+suppressWarnings(he_input_data <- he_input_data %>%
+  mutate(across(-c("Grain", "Crystal_Fragment."), as.numeric)) %>%
+    mutate_at(c("X147Sm", "X._1σ.3"), ~replace(., is.na(.), 0)) %>%
+    rename("Run" = "Analysis_Session") %>%
+    mutate("Sample" = "BP22-02", .after = 1)) # converts all values that should be numeric to numeric
+# suppressWarnings() supresses an NA message (NAs are from analyses with no Sm)
+
+he_nmol <- he_nmol %>%
+  separate_wider_delim(Sample, "_", names = c("Run", "Grain"))
+suppressWarnings(he_nmol <- he_nmol %>%
+    mutate(across(-c("Grain"), as.numeric)) %>%
+    mutate("Sample" = "BP22-02", .after = 1)) # convert to numeric
+```
+```{r merge data tables, echo = F}
+# date_data <- left_join(upb_data, he_input_data, by = c("Run", "Sample", "Grain"))
+he_data_all <- left_join(he_input_data, he_nmol, by = c("Run", "Sample", "Grain")) %>%
+  mutate(Grain = case_when(Grain == "z06" ~ "z006",
+                           Grain == "z07" ~ "z007",
+                           .default = Grain)) %>%
+  mutate(Grain = sub("z", "", Grain))
+```
+```{r calculate pre and post depositional He}
+L238 <- 0.00000000015512 #decay constants in yr
+L235 <- 0.00000000098485
+L232 <- 0.0000000000499
+L147 <- (log(2)/(1.06*10^(11)))
+Av <- 6.022*10^(23) # avogadro's number
+td <- (992.51+0.64 - (((992.51 + 0.64) - (985.5- 35.8))/2)) *10^6 # maximum depositonal age in yr
+td.unc <- (((992.51 + 0.64) - (985.5- 35.8))/2) *10^6 # unvertainty on depositional age in yr
+
+he_data_all <- he_data_all %>%
+  mutate(mol.238Ud = mol.238U*exp(L238*td),
+         mol.232Thd = mol.232Th*exp(L232*td),
+         mol.147Smd = mol.147Sm*exp(L147*td)) %>%
+  mutate(mol.238Ud.unc = mol.238Ud*sqrt((X..1/mol.238U)^2 + (L238*td.unc)^2),
+         mol.232Thd.unc = mol.232Thd*sqrt((X..5/mol.232Th)^2 + (L232*td.unc)^2),
+         mol.147Smd.unc = case_when(mol.147Smd == 0 ~ 0,
+                                    .default = mol.147Smd*sqrt((X..7/mol.147Sm)^2 + (L147*td.unc)^2))
+  ) %>%
+  mutate(mol.4He.d = case_when(Crystal_Fragment. == "No" ~ 8*X238Ft*0.9928*mol.238U*(exp(L238*td)-1) +
+           7*X235Ft*0.0072*mol.238U*(exp(L235*td)-1) +
+           6*X232Ft*mol.232Th*(exp(L232*td)-1) +
+           X147Ft*mol.147Sm*(exp(L147*td)-1),
+           .default = 8*0.9928*mol.238U*(exp(L238*td)-1) +
+           7*0.0072*mol.238U*(exp(L235*td)-1) +
+           6*mol.232Th*(exp(L232*td)-1) +
+           mol.147Sm*(exp(L147*td)-1))) %>%
+  mutate(A = case_when(Crystal_Fragment. == "No" ~ X238Ft*mol.238U*(exp(L238*td)-1)*sqrt(((X..8/X238Ft)^2) + ((X..3/mol.238U)^2) + (L238*td.unc)^2),
+                       .default = mol.238U*(exp(L238*td)-1)*sqrt(((X..3/mol.238U)^2) + (L238*td.unc)^2)),
+         B = case_when(Crystal_Fragment. == "No" ~ X235Ft*mol.238U*(exp(L235*td)-1)*sqrt(((X..9/X235Ft)^2) + ((X..3/mol.238U)^2) + (L235*td.unc)^2),
+                       .default = mol.238U*(exp(L235*td)-1)*sqrt( ((X..3/mol.238U)^2) + (L235*td.unc)^2)),
+         C = case_when(Crystal_Fragment. == "No" ~ X232Ft*mol.232Th*(exp(L232*td)-1)*sqrt(((X..10/X232Ft)^2) + ((X..5/mol.232Th)^2) + (L232*td.unc)^2),
+                       .default = mol.232Th*(exp(L232*td)-1)*sqrt(((X..5/mol.232Th)^2) + (L232*td.unc)^2)),
+         D = case_when(mol.147Sm == 0 ~ 0,
+                       mol.147Sm != 0 & Crystal_Fragment. == "No" ~ X147Ft*mol.147Sm*(exp(L147*td)-1)*sqrt(((X..11/X147Ft)^2) + ((X..7/mol.147Sm)^2) + (L147*td.unc)^2),
+                       .default = mol.147Sm*(exp(L147*td)-1)*sqrt( ((X..7/mol.147Sm)^2) + (L147*td.unc)^2))) %>%
+  mutate(mol.4He.d.unc = sqrt(((8*0.9928)^2)*(A^2) + ((7*0.0072)^2)*(B^2) + (6^2)*(C^2) + (D^2))) %>%
+  mutate(across(c(Run, Grain), as.numeric))
+```
+```{r split dataframe, echo = F}
+ninh_i <- which(he_data_all$mol.4He + he_data_all$X..1 < he_data_all$mol.4He.d - he_data_all$mol.4He.d.unc) # no inheritance index
+inh_i <- which(he_data_all$mol.4He - he_data_all$X..1 > he_data_all$mol.4He.d + he_data_all$mol.4He.d.unc) #  inheritance index
+gz_i <- which(he_data_all$mol.4He - he_data_all$X..1 <= he_data_all$mol.4He.d + he_data_all$mol.4He.d.unc &
+                he_data_all$mol.4He + he_data_all$X..1 >= he_data_all$mol.4He.d - he_data_all$mol.4He.d.unc)
+#ninh_i <- setdiff(ninh_i, gz_i)
+#inh_i <- setdiff(inh_i, gz_i)
+inherited_data <- he_data_all[inh_i, ]
+date_no_inheritance_data <- he_data_all[ninh_i, ]
+grayzone_data <- he_data_all[gz_i, ]
+```
+```{r export hecalc tables, echo = F}
+hecalc_header <- c("Sample", "fmol 4He", "±", "mol 4He", "±",
+                   "ng 238U", "±", "mol 238U", "±","ng 232Th", "±", "mol 232Th", "±",
+                   "ng 147Sm", "±", "mol 147Sm", "±",
+                   "238Ft" ,"±", "235Ft", "±", "232Ft", "±", "147Ft", "±")
+
+no_inheritance_hecalc <- date_no_inheritance_data %>%
+  mutate("Sample" = paste(Laser_Session, Grain, sep = "_")) %>%
+  select(c("Sample", "fmol.4He", "X.", "mol.4He", "X..1", "ng.238U", "X..2",
+           "mol.238U", "X..3", "ng.232Th", "X..4", "mol.232Th", "X..5", "ng.147Sm", "X..6", "mol.147Sm", "X..7", "X238Ft", "X..8", "X235Ft", "X..9",
+           "X232Ft", "X..10", "X147Ft", "X..11"))
+colnames(no_inheritance_hecalc) <- hecalc_header
+
+write.xlsx(no_inheritance_hecalc, paste("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Data/", "no_inh_hecalc_in_3.xlsx", sep = ""))
+
+no_inheritance_grayzone <- grayzone_data %>%
+  mutate("Sample" = paste(Laser_Session, Grain, sep = "_")) %>%
+  select(c("Sample", "fmol.4He", "X.", "mol.4He", "X..1", "ng.238U", "X..2",
+           "mol.238U", "X..3", "ng.232Th", "X..4", "mol.232Th", "X..5", "ng.147Sm", "X..6", "mol.147Sm", "X..7", "X238Ft", "X..8", "X235Ft", "X..9",
+           "X232Ft", "X..10", "X147Ft", "X..11"))
+colnames(no_inheritance_grayzone) <- hecalc_header
+
+write.xlsx(no_inheritance_grayzone, paste("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Data/", "gz_no_inh_hecalc_in_3.xlsx", sep = ""))
+
+date_inheritance_data <- inherited_data %>%
+  mutate("Sample" = paste(Laser_Session, Grain, sep = "_")) %>%
+  mutate(mol.4He = mol.4He-mol.4He.d,
+         X..1 = sqrt(X..1^2 + mol.4He.d.unc^2),
+         mol.238U = mol.238Ud, X..3 = mol.238Ud.unc,
+         mol.232Th = mol.232Thd, X..5 = mol.232Thd.unc,
+         mol.147Sm = mol.147Smd, X..7 = mol.147Smd.unc,
+         X238Ft = 1, X235Ft = 1, X232Ft = 1, X147Ft = 1,
+         X..8 = 0, X..9 = 0, X..10 = 0, X..11 = 0) %>%
+  mutate(fmol.4He = mol.4He/(10^(-15)), X. = X..1/(10^(-15)),
+         ng.238U = mol.238U *238/(10^(-9)), X..2 = X..3*238/(10^(-9)),
+         ng.232Th = mol.232Th *232/(10^(-9)), X..4 = X..5*232/(10^(-9)),
+         ng.147Sm = mol.147Sm *147/(10^(-9)), X..6 = X..7*147/(10^(-9))) %>%
+  select(c("Sample", "fmol.4He", "X.", "mol.4He", "X..1", "ng.238U", "X..2",
+           "mol.238U", "X..3", "ng.232Th", "X..4", "mol.232Th", "X..5", "ng.147Sm", "X..6", "mol.147Sm", "X..7", "X238Ft", "X..8", "X235Ft", "X..9",
+           "X232Ft", "X..10", "X147Ft", "X..11"))
+colnames(date_inheritance_data) = hecalc_header
+
+write.xlsx(date_inheritance_data, paste("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Data/", "inh_hecalc_in_3.xlsx", sep = ""))
+
+# possible inheritance. uses maximum possible He pre deposition
+gz_inheritance_data <- grayzone_data %>%
+  mutate("Sample" = paste(Laser_Session, Grain, sep = "_")) %>%
+  mutate(mol.4He = (mol.4He + X..1) - (mol.4He.d - mol.4He.d.unc),
+         X..1 = sqrt(X..1^2 + mol.4He.d.unc^2),
+         mol.238U = mol.238Ud, X..3 = mol.238Ud.unc,
+         mol.232Th = mol.232Thd, X..5 = mol.232Thd.unc,
+         mol.147Sm = mol.147Smd, X..7 = mol.147Smd.unc,
+         X238Ft = 1, X235Ft = 1, X232Ft = 1, X147Ft = 1,
+         X..8 = 0, X..9 = 0, X..10 = 0, X..11 = 0) %>%
+  mutate(fmol.4He = mol.4He/(10^(-15)), X. = X..1/(10^(-15)),
+         ng.238U = mol.238U *238/(10^(-9)), X..2 = X..3*238/(10^(-9)),
+         ng.232Th = mol.232Th *232/(10^(-9)), X..4 = X..5*232/(10^(-9)),
+         ng.147Sm = mol.147Sm *147/(10^(-9)), X..6 = X..7*147/(10^(-9))) %>%
+  select(c("Sample", "fmol.4He", "X.", "mol.4He", "X..1", "ng.238U", "X..2",
+           "mol.238U", "X..3", "ng.232Th", "X..4", "mol.232Th", "X..5", "ng.147Sm", "X..6", "mol.147Sm", "X..7", "X238Ft", "X..8", "X235Ft", "X..9",
+           "X232Ft", "X..10", "X147Ft", "X..11"))
+colnames(gz_inheritance_data) = hecalc_header
+
+write.xlsx(gz_inheritance_data, paste("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Data/", "gz_inh_hecalc_in_3.xlsx", sep = ""))
 
 ```
+```{r load HeCalc date outputs}
+all_FT_dates <- read.xlsx("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Data/jacobsville_allFT_helcalc_op.xlsx", startRow = 3, colNames = TRUE, check.names = TRUE, sep.names = "_") %>%
+  select(!starts_with("M")) %>%
+  select(!starts_with("N"))
+colnames(all_FT_dates) <- paste(colnames(all_FT_dates),"all_FT", sep = "_")
+all_FT_dates <- all_FT_dates %>%
+  rename("Grain" ="Sample_all_FT")
 
+all_FT_analytical <- read.xlsx("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Data/jacobsville_hecalc_analytic_op.xlsx", startRow = 3, colNames = TRUE, check.names = TRUE, sep.names = "_") %>%
+    select(!starts_with("M")) %>%
+  select(!starts_with("N"))
+colnames(all_FT_analytical) <- paste(colnames(all_FT_analytical),"all_analytical", sep = "_")
+all_FT_analytical <- all_FT_analytical %>%
+  rename("Grain" ="Sample_all_analytical")
+
+inh_dates <- read.xlsx("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Data/inh_hecalc_op_3.xlsx", startRow = 3, colNames = TRUE, check.names = TRUE, sep.names = "_")
+
+gz_inh_dates <- read.xlsx("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Data/gz_inh_hecalc_op_4.xlsx", startRow = 3, colNames = TRUE, check.names = TRUE, sep.names = "_")
+
+inh_dates <- rbind(inh_dates, gz_inh_dates) %>%
+  arrange(Sample) %>%
+    select(!starts_with("M")) %>%
+  select(!starts_with("N"))
+colnames(inh_dates) <- paste(colnames(inh_dates), "inh_FT", sep = "_")
+inh_dates <- inh_dates %>%
+  rename("Grain" ="Sample_inh_FT")
+```
+```{r merge Hecalc outputs}
+td <- (992.51+0.64 - (((992.51 + 0.64) - (985.5- 35.8))/2)) *10^6 # maximum depositonal age in yr
+td.unc <- (((992.51 + 0.64) - (985.5- 35.8))/2) *10^6 # unvertainty on depositional age in yr
+
+hecalc_data <- full_join(all_FT_dates, all_FT_analytical, by = "Grain") %>%
+  full_join(inh_dates, by = "Grain") %>%
+  mutate(Inherited_date = Corrected_date_inh_FT,
+         Corrected_date_inh_FT = Corrected_date_inh_FT + (td/(10^6)),
+         Inherited_linear_1_uncertainty_inh_FT = Linear_corrected_1..963._uncertainty_inh_FT,
+         Linear_corrected_1..963._uncertainty_inh_FT = sqrt(Linear_corrected_1..963._uncertainty_inh_FT^2 + (td.unc/(2*10^6))^2),
+         Inherited_linear_2_uncertainty_inh_FT = Linear_corrected_2..963._uncertainty_inh_FT,
+         Linear_corrected_2..963._uncertainty_inh_FT = sqrt(Linear_corrected_2..963._uncertainty_inh_FT^2 + (td.unc/(10^6))^2)) %>%
+  separate_wider_delim(Grain, "_", names = c("Run", "Grain")) %>%
+  mutate(Grain = sub("z", "", Grain)) %>%
+  mutate_all(as.numeric) %>%
+  mutate("Sample" = "BP22-02", .after = 1) %>%
+  rename("Uncorrected_Date" = "Raw_date_all_FT",
+         "Linear_uncorrected_1..963._uncertainty_all_Ft" = "Linear_raw_1..963._uncertainty_all_FT",
+         "Linear_uncorrected_2.963._uncertainty_all_Ft" = "Linear_raw_2..963._uncertainty_all_FT") %>%
+  select(!matches( "raw"))
+
+# all_data <- full_join(date_data, hecalc_data, by = c("Run", "Sample", "Grain"))
+```
+```{r He tables for publication, echo = F}
+he_data_all <- he_data_all %>%
+  select(!c(A, B, C, D))
+old_names <- names(he_data_all)
+new_names <- old_names
+for(i in seq(15,73, 2)){
+  new_names[i+1] <- paste(new_names[i], "1s", sep = ".")
+}
+he_data_clean <- he_data_all
+colnames(he_data_clean) <- new_names
+
+main_he <- full_join(he_data_clean, hecalc_data, by = c("Run", "Sample", "Grain")) %>%
+  select(!starts_with("Inherited"))
+
+analytical_he <- main_he %>%
+  select(!starts_with("mol")) #%>%
+  #select(!contains("inh"))
+analytical_he <- analytical_he[ , c(1:50, 67: 72, 74:78)]
+analytical_he <- analytical_he[ , c(1:54, 57:58, 55:56, 59:61)]
+
+colnames(analytical_he) <- c("Run", "Sample", "Grain", "Length.1", "Width.1",
+                             "Length.2", "Width.2", "Geometry", "Np", "Length.P", "Width.P", "Grind.Depth", "Orientation", "Fragment", "He4.fmol", "He4.fmol.1s", "U.ng", "U.ng.1s", "Th.ng", "Th.ng.1s", "Sm.ng", "Sm.ng.1s", "Volume", "Volume.1s", "Mass", "Mass.1s", "He4.nmol.g", "Her.nmol.g.1s", "U.ppm", "U.ppm.1s", "Th.ppm", "Th.ppm.1s", "Sm.ppm", "Sm.ppm.1s", "eU", "eU.1s", "RSV", "RSV.1s", "FT238", "FT238.1s","FT235", "FT235.1s", "FT232", "FT232.1s", "FT147", "FT147.1s", "Combined.FT", "Combined.FT.1s", "RFT", "RFT.1s", "Uncorrected.Date",
+"Uncorrected.Date.1s",
+"Uncorrected.Date.2s",
+"Corrected.Date",
+"Corrected.Date.Analytical.Uncertainty.1s", "Corrected.Date.Analytical.Uncertainty.2s",
+"Corrected.Date.Analytical.FT.Uncertainty.1s", "Corrected.Date.Analytical.FT.Uncertainty.2s",
+"Corrected_Date.No.FT.Inheritance",
+"Corrected.Date.No.FT.Inheritance.Analytical.Uncertainty.1s", "Corrected.Date.No.FT.Inheritance.Analytical.Uncertainty.2s"
+)
+```
+
+```{r data tables for print, echo = F}
+# U-Pb ----
+print_upb <- upb_clean %>%
+      mutate(Run = as.character(Run)) %>%
+  mutate(across(where(is.numeric), ~ signif(.x, 4)))
+
+upb_footnotes <- data.frame("Run" = c("Table reporting following recommendations in Horstwood et al. (2016). 238/235 ratio = 137.818 from Heiss et al. (2012). Decay constants of Jaffey et al. (1971). NA: not available. Uncertainties include systematic error.",
+                                      "Values uncorrected for common Pb.",
+                                      "* % Concordance calculated as (206Pb/238U Date)/(207Pb/206Pb Date)*100",
+                            "References cited in table:",
+                            "Hiess, J., Condon, D.J., McLean, N. and Noble, S.R., 2012. 238U/235U systematics in terrestrial uranium-bearing minerals. Science. 335(6076), pp.1610-1614.",
+                            "Horstwood, M.S., Košler, J., Gehrels, G., Jackson, S.E., McLean, N.M., Paton, C., Pearson, N.J., Sircombe, K., Sylvester, P., Vermeesch, P. and Bowring, J.F., 2016. Community‐derived standards for LA‐ICP‐MS U‐(Th‐) Pb geochronology–Uncertainty propagation, age interpretation and data reporting. Geostandards and Geoanalytical Research. 40(3), pp.311-332.",
+                            "Jaffey, A.H., Flynn, K.F., Glendenin, L.E., Bentley, W.T. and Essling, A.M., 1971. Precision measurement of half-lives and specific activities of U 235 and U 238. Physical review C, 4(5), p.1889."))
+
+print_upb <- full_join(print_upb, upb_footnotes)
+
+colnames(print_upb) <- c("Run", "Sample", "Grain", "Spot Size", "Fluence",
+                         "Repetition Rate", "U/Th", "± 2SE", "206Pb/204Pb",
+                         "± 2SE", "238U/206Pb", "± 2SE", "207Pb/235U", "± 2SE", "rho 207Pb/206Pb v. 238U/206Pb", "208Pb/206Pb", "± 2SE", "206Pb/238U", "± 2SE", "rho 206Pb/238U v. 207Pb/235U", "208Pb/232Th", "± 2SE", "207Pb/206Pb Date", "± 2SE", "206Pb/238U Date", "± 2SE", "207Pb/235U Date", "± 2SE",
+                         "208Pb/232Th Date", "± 2SE", "% Concordance*")
+
+# machine reader compatible
+repository_upb <- upb_clean
+colnames(repository_upb) <- c("Run", "Sample", "Grain", "Spot.Size", "Fluence",
+                         "Repetition.Rate", "U.Th", "U.Th.SE", "Pb206.Pb204",
+                         "Pb206.Pb204.2SE", "U238.Pb206", "U238.Pb206.2SE", "Pb207.U235", "Pb207.U235.2SE", "rho.Pb207.Pb206_v_U238Pb206", "Pb208.Pb206", "Pb208.Pb206.2SE", "Pb206.U238", "Pb206.U238.2SE", "rho.Pb206.U238U_v_Pb207.U235", "Pb208.Th232", "Pb208.Th232.2SE", "Pb207.Pb206_Date", "Pb207.Pb206_Date.2SE", "Pb206.U238_Date", "Pb206.U238_Date.2SE", "Pb207.U235_Date", "Pb207.U235_Date.2SE",
+                         "Pb208.Th232_Date", "Pb208.Th232_Date.2SE", "Percent.Concordance")
+
+# He ----
+
+he_print.1 <- analytical_he %>%
+  mutate(Run = as.character(Run)) %>%
+  mutate(across(where(is.numeric), ~ signif(.x, 4))) %>% # this makes mass zero which is a problem
+  mutate_all(as.character)
+
+he_units <- data.frame("Run" = NA, "Sample" = NA, "Grain" = NA,
+                                "Length.1" = "µm", "Width.1"= "µm",
+                             "Length.2" = "µm", "Width.2" = "µm", "Geometry" = NA, "Np" = NA, "Length.P" = "µm", "Width.P"= "µm", "Grind.Depth"= "µm", "Orientation" = NA, "Fragment" = NA, "He4.fmol" = "fmol", "He4.fmol.1s" = "fmol", "U.ng" = "ng", "U.ng.1s" = "ng", "Th.ng" = "ng", "Th.ng.1s" = "ng", "Sm.ng" = "ng", "Sm.ng.1s" = "ng", "Volume" = "µm3", "Volume.1s" = "µm3", "Mass" = "g", "Mass.1s" = "g", "He4.nmol.g" = "nmol/g", "Her.nmol.g.1s" = "nmol/g", "U.ppm" = "ppm", "U.ppm.1s" = "ppm", "Th.ppm" = "ppm", "Th.ppm.1s" = "ppm", "Sm.ppm" = "ppm", "Sm.ppm.1s" = "ppm", "eU" = "ppm", "eU.1s" = "ppm", "RSV" = "µm" , "RSV.1s" = "µm", "FT238" = NA, "FT238.1s" = NA,"FT235" = NA, "FT235.1s" = NA, "FT232" = NA, "FT232.1s" = NA, "FT147" = NA, "FT147.1s" = NA, "Combined.FT" = NA, "Combined.FT.1s" = NA, "RFT" = "µm", "RFT.1s" = "µm", "Uncorrected.Date" = "Ma",
+"Uncorrected.Date.1s" = "Ma",
+"Uncorrected.Date.2s" = "Ma",
+"Corrected.Date" = "Ma",
+"Corrected.Date.Analytical.Uncertainty.1s" = "Ma", "Corrected.Date.Analytical.Uncertainty.2s" = "Ma",
+"Corrected.Date.Analytical.FT.Uncertainty.1s" = "Ma", "Corrected.Date.Analytical.FT.Uncertainty.2s" = "Ma",
+"Corrected_Date.No.FT.Inheritance" = "Ma", "Corrected.Date.No.FT.Inheritance.Analytical.Uncertainty.1s" = "Ma", "Corrected.Date.No.FT.Inheritance.Analytical.Uncertainty.2s" = "Ma")
+
+he_footer <- data.frame("Run" = c("a - This table follows the recommendations and approach in Flowers et al. (2022).", "b - U-Pb LA-ICP-MS data collection session.", "c - Zircon grain analyzed.", "d - Length is measured parallel to the c-axis and includes pyramidal terminations. It is measured twice on two perpendicular sides.",
+"e - Width 1 is measured perpendicular to the c-axis. Width 2 is measured perpendicular to both the c-axis and width 1.",
+"f - Geometry is defined as described as in Figure 3 of Ketcham et al. (2011). 1 = Ellipsoidal, 2 = Cylindrical, 3 = Tetragonal.",
+"g - Np describes the number of pyramidal terminations of the grain.",
+"h - Length P is a meausrement of the polished face of the grain measured parallel to the c-axis. Measured once.",
+"i - Width P is a measurement of the polished face of the grain measured perpendicular to the c-axis. Meausred once.",
+"j- Grind Depth is the average depth of epoxy/sample removed while polishing the grain mounts. Determined by averaging measurements from 2-6 glass beads embedded in epoxy.",
+"k - Orientation of the polishing pane to the crystallographic c-axis. 1 = Perpendicular to c-axis. 2 = Parallel to c-axis.",
+"l - Blank-corrected 4He measurement.",
+"m - Uncertainties on 4He, U, Th, and Sm are reported as the 1σ standard deviation and include the propagated uncertainties on the measurements of the sample, blank, spike, and standard.",
+"n - Total blank-corrected ng of 238U and 235U. Total 238U is measured and 235U is calculated assuming 235U = 238U/137.818 after Hiess et al. (2012).",
+"o - Total blank-corrected ng of 232Th",
+"p - Total blank-corrected ng of 147Sm. In some cases Sm may not be measured, for example in minerals like zircon with negligible Sm. NA indicates when Sm is not measured.",
+"q - Volume of the polished grain calculated after Peak (2025).",
+"r - Uncertainty on volume calculated after Peak (2025).",
+"s - Mass is the mass of the crystal. Determined from the measured volume and mineral densities in Ketcham et al. (2011).",
+"t - Uncertainty on mass inherited from volume uncertainty.",
+"u - Concentration of each element (He, U, Th and Sm) computed from the mass and the absolute amount of the measured isotopes.",
+"v - Uncertainties on He, U, Th, and Sm concentrations are reported at 1s and include the propagated total analytical uncertainties (TAU) and mass uncertainty.",
+"w - eU is effective uranium concentration. Calculated as U + 0.238*Th + 0.0083*147Sm after Appendix A of Cooperdock et al. (2019).",
+"x - Uncertainty on eU is propagated from isotope concentrations.",
+"y - RSV is the radius of a sphere with an equivalent volume to ejection surface area ratio as the grain, calculated using Equation 3 in Ketcham et al. (2011).",
+"zz - Uncertainty on RSV inherited from volume, represents a minimum quantified uncertainty.",
+"aa - Individual alpha-ejection correction values for 238U, 232Th, and 147Sm. Calculated after Peak (2025).",
+"ab - Uncertainty on individual alpha-ejection corrections applied according to grain geometry following recommendations in Zeigler et al. (2024). Ellipsoid: 3%, 4%, 4%, and 1% for FT,238, FT,235, FT,232, and FT,147, respectively. Tetragonal/Cylindrical: 3%, 4%, 5%, and 1% for FT,238, FT,235, FT,232, and FT,147, respectively.",
+"ac - The combined alpha-ejection correction for the crystal calculated from parent isotope-specific FT corrections, the proportion of U and Th contributing to 4He production and assuming homogeneous parent isotope distributions using equation A4 in Cooperdock et al., (2019).",
+"ad - Uncertainty on the combined FT correction propagated from isotope-specific FT corrections, assigned following recommendations in Zeigler et al. (2024). Reported at 1σ.",
+"ae - FT-equivalent spherical radius. The radius of a sphere with an eqivalent combined FT value to the measured grain. Calculated after Cooperdock et al., (2019).",
+"af - Uncertainty on RFT applied as 1σ = 8% following recommendations in Zeigler et al. (2024).",
+"ag - Uncorrected (U-Th)/He date is calculated iteratively using the 4He production equation defined as equation 1 in Wolf et al. (1998) modified to include He produced from Sm decay and assuming secular equilibrium.",
+"ah - Total analytical uncertainty (TAU) on the uncorrected (U-Th)/He date reported at 1σ. Includes the propagated TAU on the U, Th, Sm and He measurements. Uncertainty propagation done using HeCalc (Martin et al., 2023).",
+"ai - The corrected (U-Th)/He date is calculated iteratively using the absolute values of He, U, Th and Sm, the isotope specific FT corrections, and equation 34 in Ketcham at al. (2011) assuming secular equilibrium. Dates calculated using HeCalc (Martin et al., 2023).",
+"aj - Total analytical uncertainty (TAU) on the corrected (U-Th)/He date reported at 1σ. Includes the propagated TAU on the U, Th, Sm and He measurements. Uncertainty propagation done using HeCalc (Martin et al., 2023).",
+"ak - Total combined uncertainty on the corrected (U-Th)/He date reported at 1σ. Includes the propagated total analytical uncertainties (TAU) on the U, Th, Sm and He measurements and uncertainty on individual FT values. Uncertainty propagation done using HeCalc (Martin et al., 2023).", 
+"al - Corrected (U-Th)/He date with FT correction applied only to He production estimated to have occurred post-deposition. See Supplementary Text for details.",
+"am - Total analytical uncertainty (TAU) on the corrected (U-Th)/He date with modifed FT correction reported at 1σ. Includes the propagated TAU on the U, Th, Sm and He measurements, and uncertainty on depositional age. See Supplementary Text for details.", NA, "Rejected From Further Analysis:",
+"*No measurable U, n = 1",
+"** FT < 0.55, n = 1",
+"*** ZHe date > U-Pb date, n = 3", NA,
+"References cited in footnotes:",
+"Cooperdock, E.H.G., Ketcham, R.A., and Stockli, D.F., 2019, Resolving the effects of 2D versus 3D grain measurements on (U-Th)/ He age data and reproducibility: Geochronology, 1, p. 17-41, doi: 10.5194/gchron-1-17-2019.",
+"Flowers, R.M., Zeitler, P.K., Danišík, M., Reiners, P.W., Gautheron, C., Ketcham, R.A., Metcalf, J.R., Stockli, D.F., Enkelmann, E., and Brown, R.W., 2022, (U-Th)/He chronology: Part 1. Data, uncertainty, and reporting: Geological Society of America Bulletin special volume on the Reporting and Interpretation of Geochronologic data, https://doi.org/10.1130/B36266.1",
+"Hiess, J., Condon, D.J., McLean, N., and Noble, S.R., 2012, 238U/235U Systematics in Terrestrial Uranium-Bearing Minerals: Science, v. 335, p. 1610–1615.",
+"Ketcham, R.A., Gautheron, C., and Tassan-Got, L., 2011, Accounting for long alpha-particle stopping distances in (U-Th-Sm)/He geochronology: Refinement of the baseline case: Geochimica et Cosmochimica Acta, v. 75, p. 7779–7791, doi: 10.1016/j.gca.2011.10.011.",
+"Martin, P.E., Metcalf, J.R., and Flowers, R.M., 2023, Calculation of uncertainty in the (U-Th)/He system: Geochronology, 5, 91–107, https://doi.org/10.5194/gchron-5-91-2023",
+"Peak, B.A., 2025. Technical note: Improved calculation of volume, FT correction, and other derived data for polished zircon (U-Th)/He thermochronology. Geochronology 7, 571–582. https://doi.org/10.5194/gchron-7-571-2025.",
+"Wolf, R.A., Farley, K.A., and Kass, D.M., 1998, Modeling of the temperature sensitivity of the apatite (U-Th)/He thermochronometer: Chemical Geology, v. 148, p. 105–114.",
+"Zeigler, S.D., Baker, M., Metcalf, J.R. and Flowers, R.M., 2024. The Geometric Correction Method for zircon (U–Th)/He chronology: correcting systematic error and assigning uncertainties to alpha-ejection corrections and eU concentrations. Geochronology, 6(2), pp.199-226."))
+
+he_print <- full_join(he_print.1, he_footer, by = "Run")
+he_print <- rbind(he_units, he_print)
+colnames(he_print) <- c("Runab", "Sample", "Grainc", "Length 1d", "Width 1e",
+                             "Length 2d", "Width 2e", "Geometryf", "Npg", "Length Ph", "Width Pi", "Grind Depthj", "Orientationk", "Fragment", "4Hel", "± 1σm", "Un", "± 1σm", "Tho", "± 1σm", "Smp", "± 1σm", "Volumeq", "± 1σr", "Masss", "± 1σt", "4He4u", "± 1σv", "Uu", "± 1σv", "Thu", "± 1σv", "Smu", "± 1σv", "eUw", "± 1σx", "RSVy", "± 1σz", "FT238aa", "± 1σab","FT235aa", "± 1σab", "FT232aa", "± 1σab", "FT147aa", "± 1σab", "Combined FTac", "± 1σad", "RFTae", "± 1σaf", "Uncorrected Dateag",
+"± 1σah",
+"Uncorrected.Date.2s",
+"Corrected Dateai",
+"± 1σ TAUaj", "Corrected.Date.Analytical.Uncertainty.2s",
+"± 1σ TAU + GEMak", "Corrected.Date.Analytical.FT.Uncertainty.2s",
+"Corrected Date No Inherited FTal",
+"± 1σ TAUam", "Corrected.Date.No.FT.Inheritance.Analytical.Uncertainty.2s"
+)
+```
+```{r write and save tables as xlsx}
+# human reader file add sheets ---
+write.xlsx(print_upb, "/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/data_tables_S1.xlsx", sheetName = "Table S1. U-Pb Data")
+write.xlsx(he_print, "/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/data_tables_S4.xlsx", sheetName = "Sheet1")
+
+# repository file add sheets ----
+write.xlsx(repository_upb, "/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/repository_data_tables.xlsx",
+           sheetName = "U.Pb.Data")
+repo <- loadWorkbook("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/repository_data_tables.xlsx")
+addWorksheet(repo, "U.Pb.Data.Reporting")
+writeData(repo, "U.Pb.Data.Reporting", upb_footnotes)
+addWorksheet(repo, "U.Th.He.Data")
+writeData(repo, "U.Th.He.Data", analytical_he)
+addWorksheet(repo, "U.Th.He.Units")
+writeData(repo, "U.Th.He.Units", he_units)
+addWorksheet(repo, "U.Th.He.Explanation")
+writeData(repo, "U.Th.He.Explanation", he_footer)
+saveWorkbook(repo, "/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/repository_data_tables.xlsx", overwrite = T)
+
+
+
+```
