@@ -1,0 +1,820 @@
+---
+title: "Jacobsville_Data_Viz"
+author: "Barra Peak"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(openxlsx) # read in and export microsoft excel files
+library(dplyr) # easier datatable handling
+library(tidyverse) # for easier datatable handling
+library(stringr) # for easier character data handling
+library(tibble) # for easier datatable rearranging
+library(ggplot2) # plotting
+library(viridis) # viridis color maps
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r load clean u-pb and he data}
+upb_data <- read.xlsx("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/repository_data_tables.xlsx", "U.Pb.Data", startRow = 1, fillMergedCells = T, check.names = T)
+he_data <- read.xlsx("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/repository_data_tables.xlsx", "U.Th.He.Data", startRow = 1, fillMergedCells = T, check.names = T)
+```
+```{r load and clean Malone 2016 U-Pb data, echo = F}
+malone_data <- drop_na(read.csv("/Users/barrapeak/Dropbox/Thermo-Detrital/Data/Malone_data.csv"))
+malone_data <- malone_data %>%
+  mutate(
+    Concordant = case_when(
+    Conc... < 90 ~ "No",
+    Conc... > 110 ~ "No",
+    .default = "Yes"
+    )
+  )
+
+malone_data$Site <- str_extract(malone_data$Analysis, "[^- | ^_]+")
+malone_data$Site.Factor <- as.factor(malone_data$Site)
+#summary(malone_data$Site.Factor)
+
+malone_data_comp <- malone_data %>%
+  filter(Site == "Deer") %>%
+  filter(Concordant == "Yes")
+```
+```{r combine and drop disconcordant u-pb dates, echo=FALSE}
+all_data <- full_join(upb_data, he_data, by = c("Run", "Sample", "Grain")) %>%
+  filter(between(Percent.Concordance, 90, 110)) %>%
+  filter(Sample == "BP22-02") %>%
+  mutate(ZHe.Report = case_when(Fragment == "Yes" ~ Uncorrected.Date,
+                                .default = Corrected.Date)) %>%
+  mutate(ZHe.Report.1s = case_when(Fragment == "Yes" ~ Uncorrected.Date.1s,
+                                .default = Corrected.Date.Analytical.FT.Uncertainty.1s)) %>%
+  mutate(FT.Applied = case_when(Fragment == "Yes" ~ "No",
+                                .default = "Yes"))
+```
+```{r calculate max alpha dose and uncertainty}
+L238 <- 0.00000000015512 #decay constants in yr
+L235 <- 0.00000000098485
+L232 <- 0.0000000000499
+L147 <- (log(2)/(1.06*10^(11)))
+Av <- 6.022*10^(23) # avogadro's number
+
+all_data <- all_data %>%
+  mutate(U238.atoms.g = (0.9928*U.ppm*10^(-6)/238)*Av) %>%
+  mutate(U238.a.g.u = (0.9928*U.ppm.1s*10^(-6)/238)*Av) %>%
+  mutate(U235.atoms.g = (0.0072*U.ppm*10^(-6)/235)*Av) %>%
+  mutate(U235.a.g.u = (0.0072*U.ppm.1s*10^(-6)/235)*Av) %>%
+  mutate(Th.atoms.g = (Th.ppm*10^(-6)/232)*Av) %>%
+  mutate(Th.a.g.u = (Th.ppm.1s*10^(-6)/232)*Av) %>%
+  mutate(Sm.atoms.g = (Sm.ppm*10^(-6)/147)*Av) %>%
+  mutate(Sm.a.g.u = (Sm.ppm.1s*10^(-6)/232)*Av) %>%
+  mutate(Max.Alpha.Dose = 8*U238.atoms.g*(exp(L238*Pb207.Pb206_Date*10^6)-1) + 
+  7*U235.atoms.g*(exp(L235*Pb207.Pb206_Date*10^6)-1) + 
+  6*Th.atoms.g*(exp(L232*Pb207.Pb206_Date*10^6)-1) +
+    Sm.atoms.g*(exp(L147*Pb207.Pb206_Date*10^6)-1)) %>% # keep editing here
+  mutate(A.u = 8*U238.atoms.g*(exp(L238*Pb207.Pb206_Date*10^6)-1)*
+           sqrt((U238.a.g.u/U238.atoms.g)^2 + 
+                  (L238*Pb207.Pb206_Date.2SE/2)^2)) %>%
+  mutate(B.u = 7*U235.atoms.g*(exp(L235*Pb207.Pb206_Date*10^6)-1)*
+           sqrt((U235.a.g.u/U235.atoms.g)^2 + (L235*Pb207.Pb206_Date.2SE/2)^2)) %>%
+  mutate(C.u = 6*Th.atoms.g*(exp(L232*Pb207.Pb206_Date*10^6)-1)*
+           sqrt((Th.a.g.u/Th.atoms.g)^2 + (L232*Pb207.Pb206_Date.2SE/2)^2)) %>%
+  mutate(D.u = case_when(Sm.ppm == 0 ~ 0,
+                         .default = 6*Sm.atoms.g*(exp(L147*Pb207.Pb206_Date*10^6)-1)*
+           sqrt((Sm.a.g.u/Sm.atoms.g)^2 + (L147*Pb207.Pb206_Date.2SE/2)^2))) %>%
+  mutate(Max.Alpha.Dose.1s = sqrt(A.u^2 + B.u^2 + C.u^2 + D.u^2)) %>%
+  select(!c(A.u, B.u, C.u, D.u))
+```
+```{r Figure S1. combined density plots, echo = F}
+binwidth = 30
+# define density functions
+# new data
+upb_density <- density(all_data$Pb207.Pb206_Date, bw = binwidth)
+upb_density.fun <- data.frame("x" = unlist(upb_density[[1]]), "y" = unlist(upb_density[[2]]))
+peak1 <- data.frame("x" = upb_density.fun[which(upb_density.fun == max(upb_density.fun$y), arr.ind=TRUE)[1], 1], "y" = max(upb_density.fun$y))
+peak2 <- data.frame("x" = upb_density.fun[which(upb_density.fun == max(upb_density.fun[upb_density.fun$x > 1700, ]$y), arr.ind=TRUE)[1], 1], "y" = max(upb_density.fun[upb_density.fun$x > 1700, ]$y))
+peak3 <- data.frame("x" = upb_density.fun[which(upb_density.fun == max(upb_density.fun[upb_density.fun$x > 2500, ]$y), arr.ind=TRUE)[1], 1], "y" = max(upb_density.fun[upb_density.fun$x > 2500, ]$y))
+# malone data
+malone_density <- density(malone_data_comp$X206Pb..207Pb..age, bw = binwidth)
+malone_density.fun <- data.frame("x" = unlist(malone_density[[1]]), "y" = unlist(malone_density[[2]]))
+peak1m <- data.frame("x" = malone_density.fun[which(malone_density.fun == max(malone_density.fun$y), arr.ind=TRUE)[1], 1], "y" = max(malone_density.fun$y))
+peak2m <- data.frame("x" = malone_density.fun[which(malone_density.fun == max(malone_density.fun[malone_density.fun$x > 1700, ]$y), arr.ind=TRUE)[1], 1], "y" = max(malone_density.fun[malone_density.fun$x > 1700, ]$y))
+peak3m <- data.frame("x" = malone_density.fun[which(malone_density.fun == max(malone_density.fun[malone_density.fun$x > 2500, ]$y), arr.ind=TRUE)[1], 1], "y" = max(malone_density.fun[malone_density.fun$x > 2500, ]$y))
+
+
+p.density.c <- 
+  ggplot() +
+  annotate("rect", xmin = 980, xmax = 1010, ymin = -Inf, ymax = Inf,
+               alpha = .3, fill = "#997700") + # Rigolet
+  annotate("rect", xmin = 1020, xmax = 1090, ymin = -Inf, ymax = Inf,
+               alpha = .3, fill = "#997700") + # Ottawan
+  annotate("rect", xmin = 1070, xmax = 1110, ymin = -Inf, ymax = Inf,
+               alpha = .3, fill = "#72190E") + # MCR
+  annotate("rect", xmin = 1140, xmax = 1190, ymin = -Inf, ymax = Inf,
+               alpha = .2, fill = "#997700") + # Shawinigan
+  annotate("rect", xmin = 1200, xmax = 1250, ymin = -Inf, ymax = Inf,
+               alpha = .2, fill = "#997700") + # Elezevirian
+  annotate("rect", xmin = 1300, xmax = 1360, ymin = -Inf, ymax = Inf,
+               alpha = .3, fill = "#332288") + #Pre-Elzevierian
+  annotate("rect", xmin = 1340, xmax = 1370, ymin = -Inf, ymax = Inf,
+               alpha = .3, fill = "#332288") + # SGGRP south
+  annotate("rect", xmin = 1380, xmax = 1520, ymin = -Inf, ymax = Inf,
+               alpha = .3, fill = "#332288") + # EGGRP from south + east
+  annotate("rect", xmin = 1600, xmax = 1700, ymin = -Inf, ymax = Inf,
+               alpha = .3, fill = "#225555") + # Mazatzal, from west
+  annotate("rect", xmin = 1820, xmax = 1880, ymin = -Inf, ymax = Inf,
+               alpha = .3, fill = "#225555") + # Penokean from S and E
+  # annotate("rect", xmin = 1800, xmax = 2000, ymin = -Inf, ymax = Inf,
+  #              alpha = .1, fill = "green") + # Trans Hudson Orogen from west or recycled
+  annotate("rect", xmin = 2700, xmax = 3000, ymin = -Inf, ymax = Inf,
+               alpha = .3, fill = "#225555") + # Superior Province from N
+  geom_density(data = malone_data_comp, aes(x = X206Pb..207Pb..age), bw = binwidth, fill = "gray", alpha = 0.6, adjust = 2) +   # kernal density
+  # geom_rug(data = all_data, aes(x = Pb207.Pb206_Date), alpha = 0.4, position = "jitter", outside = TRUE, color = "red") +
+  # geom_rug(data = malone_data_comp, aes(x = X206Pb..207Pb..age),alpha = 0.4, sides = "b", outside = FALSE, color = "blue") +
+   geom_density(data = all_data, aes(x = Pb207.Pb206_Date), bw = binwidth, fill = "black", alpha = 0.6, adjust = 2) +
+  coord_cartesian(clip = "off") +
+  xlim(500, 3000) +
+  xlab("207Pb/206Pb Date (Ma)") +
+  ylab("Density") +
+  annotate("text", x = 2000, y = 0.003, label = "U/Pb This Study", colour =  "black", hjust = 0) +
+  annotate("text", x = 2000, y = 0.0028, label = paste("n =", nrow(all_data)), colour =  "black", hjust = 0) +
+  annotate("text",x = 2000, y = 0.0022, label = paste("Kernel Binwidth =", round(upb_density$bw,2)), colour = "black", hjust = 0) +
+  annotate("text", x=1395-200, y = 0.0021, label = paste(signif(peak1[1], 3)), colour = "black") +
+  annotate("text", x  = 1852+200, y = 0.0006, label = paste(signif(peak2[1], 3)), colour = "black") +
+  annotate("text", x = 2700, y = 0.0002, label = paste(signif(peak3[1], 3)), colour = "black") +
+  annotate("text", x = 2000, y = 0.0026, label = "U/Pb Malone et al. (2020)", colour =  "gray", hjust = 0) +
+  annotate("text", x = 2000, y = 0.0024, label = paste("n =", nrow(malone_data_comp)), colour =  "gray", hjust = 0) +
+  #annotate("text", x = 350, y = 0.00175, label = paste("Kernel Binwidth =", round(malone_density$bw,2)), colour = "blue") +
+  # annotate("text", x=1422+150, y = 0.003, label = paste(signif(peak1m[1], 2)), colour = "blue") +
+  # annotate("text", x  = 1887, y = 0.00075, label = paste(signif(peak2m[1], 2)), colour = "blue") +
+  # annotate("text", x = 2717, y = 0.00002, label = paste(signif(peak3m[1], 2)), colour = "blue") +
+  
+  #scale_y_continuous(sec.axis = sec_axis(~.*yas, name="Kernal Density")) +
+  #ggtitle(paste("Bin size =", as.character(bw), sep = " ")) +
+  theme_bw() +
+  theme(
+    plot.title = element_text(size=12),
+    axis.text = element_text(size = 9),
+    axis.title = element_text(size = 11))
+p.density.c
+ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R.Fig.S1B.pdf", plot = p.density.c, width = 6.5, height = 3)
+```
+```{r U-Pb K-S test}
+ks <- ks.test(x = all_data$Pb207.Pb206_Date, y = malone_data_comp$X206Pb..207Pb..age, alternative = "two.sided")
+print(ks$p.value)
+```
+```{r cumulative density function plot, echo = F}
+upb_ts <- all_data %>%
+  select(Pb207.Pb206_Date) %>%
+  mutate(Source = "This Study")
+upb_m <- malone_data_comp %>%
+  select(X206Pb..207Pb..age) %>%
+  rename("Pb207.Pb206_Date" = "X206Pb..207Pb..age") %>%
+  mutate(Source = "Malone et al. (2020)")
+upb_cdf_data <- rbind(upb_ts, upb_m)
+
+upb_cdf <- upb_cdf_data %>%
+  ggplot(aes(x = Pb207.Pb206_Date, group = Source, color = Source)) +
+  annotate("rect", xmin = 980, xmax = 1010, ymin = -Inf, ymax = Inf,
+               alpha = .3, fill = "#997700") + # Rigolet
+  annotate("rect", xmin = 1020, xmax = 1090, ymin = -Inf, ymax = Inf,
+               alpha = .3, fill = "#997700") + # Ottawan
+  annotate("rect", xmin = 1070, xmax = 1110, ymin = -Inf, ymax = Inf,
+               alpha = .3, fill = "#72190E") + # MCR
+  annotate("rect", xmin = 1140, xmax = 1190, ymin = -Inf, ymax = Inf,
+               alpha = .2, fill = "#997700") + # Shawinigan
+  annotate("rect", xmin = 1200, xmax = 1250, ymin = -Inf, ymax = Inf,
+               alpha = .2, fill = "#997700") + # Elezevirian
+  annotate("rect", xmin = 1300, xmax = 1360, ymin = -Inf, ymax = Inf,
+               alpha = .3, fill = "#332288") + #Pre-Elzevierian
+  annotate("rect", xmin = 1340, xmax = 1370, ymin = -Inf, ymax = Inf,
+               alpha = .3, fill = "#332288") + # SGGRP south
+  annotate("rect", xmin = 1380, xmax = 1520, ymin = -Inf, ymax = Inf,
+               alpha = .3, fill = "#332288") + # EGGRP from south + east
+  annotate("rect", xmin = 1600, xmax = 1700, ymin = -Inf, ymax = Inf,
+               alpha = .3, fill = "#225555") + # Mazatzal, from west
+  annotate("rect", xmin = 1820, xmax = 1880, ymin = -Inf, ymax = Inf,
+               alpha = .3, fill = "#225555") + # Penokean from S and E
+  # annotate("rect", xmin = 1800, xmax = 2000, ymin = -Inf, ymax = Inf,
+  #              alpha = .1, fill = "green") + # Trans Hudson Orogen from west or recycled
+  annotate("rect", xmin = 2700, xmax = 3000, ymin = -Inf, ymax = Inf,
+               alpha = .3, fill = "#225555") + # Superior Province from N
+  stat_ecdf() +
+  coord_cartesian(clip = "off") +
+  xlim(500, 3000) +
+  xlab("207Pb/206Pb Date (Ma)") +
+  #scale_x_continuous(name = "207Pb/206Pb Date (Ma)", breaks = seq(1000, 3000, 500)) +
+  scale_color_manual(values = c("This Study" = "black", "Malone et al. (2020)" = "gray")) +
+  scale_y_continuous(name = "Cumulative Distribution Function", labels = scales::label_number(accuracy = 0.001)) +
+  annotate("text", x = 2000, y = 0.2, label = paste("K-S p-value =", signif(ks$p.value, 2)), colour =  "black", hjust = 0) +
+  theme_bw() +
+  theme(legend.background = element_rect(fill = NA, colour = NA),
+        legend.key = element_blank(),
+        legend.position = c(0.75,0.5),
+        legend.text = element_text(size = 9),
+        legend.title = element_text(size = 9, color = "transparent"),
+    plot.title = element_text(size=12),
+    axis.text = element_text(size = 9),
+    axis.title = element_text(size = 11))
+  # theme(panel.background = element_rect(fill = "transparent", colour = "transparent", linewidth = 0.75),
+  #       panel.border = element_rect(fill = NA, color = "black", linewidth = 0.75),
+  #       axis.ticks = element_line(colour = "black", linewidth = 0.5),
+  #       axis.ticks.length = unit(-0.2,"cm"),
+  #       axis.text = element_text(size = 9),
+  #       axis.title = element_text(size = 11),
+  #       plot.margin = grid::unit(c(0,0,0,0), "mm"),
+  #       legend.background = element_rect(fill = NA, colour = NA),
+  #       legend.key = element_blank(),
+  #       legend.position = c(0.85,0.75),
+  #       legend.text = element_text(size = 9),
+  #       legend.title = element_text(size = 11))
+upb_cdf
+
+ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R.Fig.S1A.pdf", plot = upb_cdf, width = 6.5, height = 3)
+```
+```{r ZHe for plotting, echo = FALSE}
+ZHe_plot_data <- all_data %>%
+  drop_na(He4.fmol) %>%
+  mutate(Max.Alpha.Dose = Max.Alpha.Dose/(10^(16))) %>%
+  mutate(Max.Alpha.Dose.1s = Max.Alpha.Dose.1s/(10^(16))) %>%
+  mutate(Age_Group = case_when(Pb207.Pb206_Date < 1600 ~ "1360 Ma",
+                               Pb207.Pb206_Date > 2500 ~ "2640 Ma",
+                               .default = "1860 Ma")) %>%
+  mutate(Age_Group = factor(Age_Group, levels = c("1360 Ma", "1860 Ma", "2640 Ma"))) %>%
+  mutate(Opacity = case_when(ZHe.Report < 100 ~ "transparent",
+                             .default = "opaque"))
+summary(ZHe_plot_data$Age_Group)
+
+color_scale <- "D"
+color_breaks <- c(1, 10, 100, 1000)
+color_limits <- c(1, 1000)
+color_trans <- "log"
+```
+```{r ZHe vs. eU plot, echo = FALSE}
+ZHe_eU <- ZHe_plot_data %>%
+  ggplot(aes(x = eU, y = ZHe.Report, xmin = eU - eU.1s, xmax = eU + eU.1s, ymin = ZHe.Report - ZHe.Report.1s, ymax = ZHe.Report + ZHe.Report.1s, shape = FT.Applied, colour =  Max.Alpha.Dose, alpha = Opacity)) +
+  geom_hline(yintercept = 992, linewidth = 0.5, color = "black") +
+  geom_errorbar(aes(width = 0)) +
+  geom_errorbarh(aes(height = 0)) +
+  geom_point(size = 2) +
+  #scale_color_viridis(option = "C", transform = "log", limits = c(10, 2000), breaks = c(10, 100, 1000), name = "eU (ppm)") +
+  #scale_color_viridis(trans = "log", limits = c(5, 780), name = "Max Alpha Dose (a/g x 10^16)") +
+  scale_color_viridis(trans = color_trans, option = color_scale, limits = color_limits, breaks = color_breaks, name = "Max Alpha\nDose\n(x1016 a/g)") +
+   #scale_color_viridis(option = color_scale, limits = c(0, 800), breaks = seq(0, 800, 100)) +
+  scale_shape_manual(values = c("No" = 15, "Yes" = 16), name = "FT Applied") +
+  scale_alpha_manual(values = c("transparent" = 0.4, "opaque" = 1), guide = "none") +
+  scale_x_continuous(name = "eU\n(ppm)", limits=c(0, 2500), breaks = seq(0, 2500, 500)) +
+  scale_y_continuous(name = "ZHe Date (Ma)", limits=c(0, 1800), breaks = seq(0, 1800, 200)) + 
+  theme(panel.background = element_rect(fill = "transparent", colour = "transparent", linewidth = 0.75),
+        panel.border = element_rect(fill = NA, color = "black", linewidth = 0.75),
+        axis.ticks = element_line(colour = "black", linewidth = 0.5),
+        axis.ticks.length = unit(-0.2,"cm"),
+        axis.text = element_text(size = 9),
+        axis.title = element_text(size = 11),
+        plot.margin = grid::unit(c(0,0,0,0), "mm"),
+        legend.background = element_rect(fill = NA, colour = NA),
+        legend.key = element_blank(),
+        legend.text = element_text(size = 9),
+        legend.position = "right") +
+  facet_wrap(vars(Age_Group), nrow = 3)
+
+ZHe_eU
+ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R.Fig.S2eU.pdf", plot = ZHe_eU, width = 3.5, height = 5.5)
+```
+```{r ZHe vs. alpha plot, echo = FALSE}
+ZHe_alpha <- ZHe_plot_data %>%
+  ggplot(aes(x = Max.Alpha.Dose, y = ZHe.Report, xmin = Max.Alpha.Dose - Max.Alpha.Dose.1s, xmax = Max.Alpha.Dose + Max.Alpha.Dose.1s, ymin = ZHe.Report - ZHe.Report.1s, ymax = ZHe.Report + ZHe.Report.1s, shape = FT.Applied, colour =  Max.Alpha.Dose, alpha = Opacity)) +
+  geom_hline(yintercept = 992, linewidth = 0.5, color = "black") +
+  geom_vline(xintercept = 100, linewidth = 0.5, color = "black", linetype = "dashed") +
+  geom_errorbar(aes(width = 0)) +
+  geom_errorbarh(aes(height = 0)) +
+  geom_point(size = 2) +
+  #scale_color_viridis(option = "C", transform = "log", limits = c(10, 2000), breaks = c(10, 100, 1000), name = "eU (ppm)") +
+  #scale_color_viridis(trans = "log", limits = c(5, 780), name = "Max Alpha Dose (a/g x 10^16)") +
+  scale_color_viridis(trans = color_trans, option = color_scale, limits = color_limits, breaks = color_breaks, name = "Max Alpha\nDose\n(x1016 a/g)") +
+   #scale_color_viridis(option = color_scale, limits = c(0, 800), breaks = seq(0, 800, 100)) +
+  scale_shape_manual(values = c("No" = 15, "Yes" = 16), name = "FT Applied") +
+  scale_alpha_manual(values = c("transparent" = 0.4, "opaque" = 1), guide = "none") +
+  scale_x_continuous(name = "Max Alpha Dose\n(x1016 a/g)", limits=c(0, 1000), breaks = seq(0, 1000, 200)) +
+  scale_y_continuous(name = "ZHe Date (Ma)", limits=c(0, 1800), breaks = seq(0, 1800, 200)) + 
+  theme(panel.background = element_rect(fill = "transparent", colour = "transparent", linewidth = 0.75),
+        panel.border = element_rect(fill = NA, color = "black", linewidth = 0.75),
+        axis.ticks = element_line(colour = "black", linewidth = 0.5),
+        axis.ticks.length = unit(-0.2,"cm"),
+        axis.text = element_text(size = 9),
+        axis.title = element_text(size = 11),
+        plot.margin = grid::unit(c(0,0,0,0), "mm"),
+        legend.background = element_rect(fill = NA, colour = NA),
+        legend.key = element_blank(),
+        legend.text = element_text(size = 9),
+        legend.position = "right") +
+  facet_wrap(vars(Age_Group), nrow = 3)
+
+ZHe_alpha
+ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R.Fig.S2alpha.pdf", plot = ZHe_alpha, width = 3.5, height = 5.5)
+```
+```{r ZHe vs. RFT, echo = FALSE}
+ZHe_plot_data_RFT <- ZHe_plot_data %>%
+  filter(FT.Applied == "Yes")
+summary(ZHe_plot_data_RFT$Age_Group)
+
+ZHe_RFT <- ZHe_plot_data_RFT %>%
+  ggplot(aes(x = RFT, y = ZHe.Report, xmin = RFT - RFT.1s, xmax = RFT + RFT.1s, ymin = ZHe.Report - ZHe.Report.1s, ymax = ZHe.Report + ZHe.Report.1s, shape = FT.Applied, colour =  Max.Alpha.Dose, alpha = Opacity)) +
+  geom_hline(yintercept = 992, linewidth = 0.5, color = "black") +
+  geom_errorbar(aes(width = 0)) +
+  geom_errorbarh(aes(height = 0)) +
+  geom_point(size = 2) +
+  #scale_color_viridis(option = "C", transform = "log", limits = c(10, 2000), breaks = c(10, 100, 1000), name = "eU (ppm)") +
+  scale_color_viridis(trans = color_trans, option = color_scale, limits = color_limits, breaks = color_breaks, name = "Max Alpha\nDose\n(x1016 a/g)") +
+  #scale_color_viridis(trans = "log", limits = c(5, 780), name = "Max Alpha Dose (a/g x 10^16)") +
+  #scale_color_viridis(option = color_scale, limits = color_limits, breaks = color_breaks) +
+   #scale_color_viridis(option = color_scale, limits = c(0, 800), breaks = seq(0, 800, 100)) +
+  scale_shape_manual(values = c("No" = 15, "Yes" = 16), name = "FT Applied") +
+  scale_alpha_manual(values = c("transparent" = 0.4, "opaque" = 1), guide = "none") +
+  scale_x_continuous(name = "FT-Equivalent\nSpherical Radius (µm)", limits=c(0, 200), breaks = seq(0, 200, 25)) +
+  scale_y_continuous(name = "ZHe Date (Ma)", limits=c(0, 1800), breaks = seq(0, 1800, 200)) + 
+  theme(panel.background = element_rect(fill = "transparent", colour = "transparent", linewidth = 0.75),
+        panel.border = element_rect(fill = NA, color = "black", linewidth = 0.75),
+        axis.ticks = element_line(colour = "black", linewidth = 0.5),
+        axis.ticks.length = unit(-0.2,"cm"),
+        axis.text = element_text(size = 9),
+        axis.title = element_text(size = 11),
+        plot.margin = grid::unit(c(0,0,0,0), "mm"),
+        legend.background = element_rect(fill = NA, colour = NA),
+        legend.key = element_blank(),
+        legend.text = element_text(size = 9),
+        legend.position = "right") +
+  facet_wrap(vars(Age_Group), nrow = 3)
+
+ZHe_RFT
+
+ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R.Fig.S2RFT.pdf", plot = ZHe_RFT, width = 3.5, height = 5.5)
+```
+
+```{r ZHe vs. UPb plot Main Paper, echo = FALSE}
+td <- (992.51+0.64 - (((992.51 + 0.64) - (985.5- 35.8))/2)) *10^6 # maximum depositonal age in yr
+td.unc <- (((992.51 + 0.64) - (985.5- 35.8))/2) *10^6 # unvertainty on depositional age in yr
+ZHe_UPb <- ZHe_plot_data %>%
+  ggplot(aes(x = Pb207.Pb206_Date, y = ZHe.Report, xmin = Pb207.Pb206_Date - Pb207.Pb206_Date.2SE, xmax = Pb207.Pb206_Date + Pb207.Pb206_Date.2SE, ymin = ZHe.Report - ZHe.Report.1s, ymax = ZHe.Report + ZHe.Report.1s, shape = FT.Applied, colour =  Max.Alpha.Dose, alpha = Opacity)) +
+  annotate("rect", xmin = 980, xmax = 1010, ymin = -Inf, ymax = Inf,
+               alpha = .3, fill = "#997700") + # Rigolet
+  annotate("rect", xmin = 1020, xmax = 1090, ymin = -Inf, ymax = Inf,
+               alpha = .3, fill = "#997700") + # Ottawan
+  annotate("rect", xmin = 1070, xmax = 1110, ymin = -Inf, ymax = Inf,
+               alpha = .3, fill = "#72190E") + # MCR
+  annotate("rect", xmin = 1140, xmax = 1190, ymin = -Inf, ymax = Inf,
+               alpha = .1, fill = "#997700") + # Shawinigan
+  annotate("rect", xmin = 1200, xmax = 1250, ymin = -Inf, ymax = Inf,
+               alpha = .1, fill = "#997700") + # Elezevirian
+  annotate("rect", xmin = 1300, xmax = 1360, ymin = -Inf, ymax = Inf,
+               alpha = .1, fill = "#332288") + #Pre-Elzevierian
+  annotate("rect", xmin = 1340, xmax = 1370, ymin = -Inf, ymax = Inf,
+               alpha = .1, fill = "#332288") + # SGGRP south
+  annotate("rect", xmin = 1380, xmax = 1520, ymin = -Inf, ymax = Inf,
+               alpha = .1, fill = "#332288") + # EGGRP from south + east
+  annotate("rect", xmin = 1600, xmax = 1700, ymin = -Inf, ymax = Inf,
+               alpha = .3, fill = "#225555") + # Mazatzal, from west
+  annotate("rect", xmin = 1820, xmax = 1880, ymin = -Inf, ymax = Inf,
+               alpha = .3, fill = "#225555") + # Penokean from S and E
+  # annotate("rect", xmin = 1800, xmax = 2000, ymin = -Inf, ymax = Inf,
+  #              alpha = .1, fill = "green") + # Trans Hudson Orogen from west or recycled
+  annotate("rect", xmin = 2700, xmax = 3000, ymin = -Inf, ymax = Inf,
+               alpha = .3, fill = "#225555") + # Superior Province from N
+  # y axis
+    annotate("rect", ymin = 980, ymax = 1010, xmin = -Inf, xmax = Inf,
+               alpha = .3, fill = "#997700") + # Rigolet
+  annotate("rect", ymin = 1020, ymax = 1090, xmin = -Inf, xmax = Inf,
+               alpha = .3, fill = "#997700") + # Ottawan
+  annotate("rect", ymin = 1070, ymax = 1110, xmin = -Inf, xmax = Inf,
+               alpha = .3, fill = "#72190E") + # MCR
+  annotate("rect", ymin = 1140, ymax = 1190, xmin = -Inf, xmax = Inf,
+               alpha = .1, fill = "#997700") + # Shawinigan
+  annotate("rect", ymin = 1200, ymax = 1250, xmin = -Inf, xmax = Inf,
+               alpha = .1, fill = "#997700") + # Elezevirian
+  annotate("rect", ymin = 1300, ymax = 1360, xmin = -Inf, xmax = Inf,
+               alpha = .1, fill = "#332288") + #Pre-Elzevierian
+  annotate("rect", ymin = 1340, ymax = 1370, xmin = -Inf, xmax = Inf,
+               alpha = .1, fill = "#332288") + # SGGRP south
+  annotate("rect", ymin = 1380, ymax = 1520, xmin = -Inf, xmax = Inf,
+               alpha = .1, fill = "#332288") + # EGGRP from south + east
+  annotate("rect", ymin = 1600, ymax = 1700, xmin = -Inf, xmax = Inf,
+               alpha = .3, fill = "#225555") + # Mazatzal, from west
+  annotate("rect", ymin = 1820, ymax = 1880, xmin = -Inf, xmax = Inf,
+               alpha = .3, fill = "#225555") + # Penokean from S and E
+  # annotate("rect", ymin = 1800, ymax = 2000, xmin = -Inf, xmax = Inf,
+  #              alpha = .1, fill = "green") + # Trans Hudson Orogen from west or recycled
+  annotate("rect", ymin = 2700, ymax = 3000, xmin = -Inf, xmax = Inf,
+               alpha = .3, fill = "#225555") + # Superior
+  annotate("rect", xmax = Inf, xmin = - Inf, ymin = 985.5-35.8, ymax = 992.51 + 0.64, fill = "#437DBF", alpha = 0.4) +
+  geom_hline(yintercept = 992.51, linewidth = 0.5, color = "#437DBF") +
+  annotate("rect", ymax = Inf, ymin = - Inf, xmin = 985.5-35.8, xmax = 992.51 + 0.64, fill = "#437DBF", alpha = 0.4) +
+  geom_vline(xintercept = 992.51, linewidth = 0.5, color = "#437DBF") +
+  # annotate("rect", xmin = -Inf, xmax = Inf, ymin = 980, ymax = 1250,
+  #              alpha = .1, fill = "orange") + 
+  # annotate("rect", xmin = 980, xmax = 1250, ymin = -Inf, ymax = Inf,
+  #              alpha = .1, fill = "orange") +
+  # annotate("rect", xmin = -Inf, xmax = Inf, ymin = 1350, ymax = 1500,
+  #              alpha = .1, fill = "pink") + 
+  # annotate("rect", xmin = 1350, xmax = 1500, ymin = -Inf, ymax = Inf,
+  #              alpha = .1, fill = "pink") +
+  geom_abline(slope = 1,  linewidth = 0.5, color = "black", linetype = "dashed") +
+  geom_errorbar(aes(width = 0)) +
+  geom_errorbarh(aes(height = 0)) +
+  geom_point(size = 2) +
+  #scale_color_viridis(option = "C", transform = "log", limits = c(10, 2000), breaks = c(10, 100, 1000), name = "eU (ppm)") +
+  #scale_color_viridis(trans = "log", limits = c(5, 780), name = "Max Alpha Dose (a/g x 10^16)") +
+  scale_color_viridis(trans = "log", option = color_scale, limits = color_limits, breaks = color_breaks, name = "Max Alpha\nDose\n(x1016 a/g)") +
+   #scale_color_viridis(option = color_scale, limits = c(0, 800), breaks = seq(0, 800, 100)) +
+  scale_shape_manual(values = c("No" = 15, "Yes" = 16), name = "FT Applied") +
+  scale_alpha_manual(values = c("transparent" = 0.4, "opaque" = 1), guide = "none") +
+  scale_x_continuous(name = "207Pb/206Pb Date (Ma)", limits=c(0, 3500), breaks = seq(0, 3000, 500)) +
+  scale_y_continuous(name = "ZHe Date (Ma)", limits=c(0, 2400), breaks = seq(0, 2000, 200)) + 
+  theme(panel.background = element_rect(fill = "transparent", colour = "transparent", linewidth = 0.75),
+        panel.border = element_rect(fill = NA, color = "black", linewidth = 0.75),
+        axis.ticks = element_line(colour = "black", linewidth = 0.5),
+        axis.ticks.length = unit(-0.2,"cm"),
+        axis.text = element_text(size = 9),
+        axis.title = element_text(size = 11),
+        plot.margin = grid::unit(c(0,0,0,0), "mm"),
+        legend.background = element_rect(fill = NA, colour = NA),
+        legend.key = element_blank(),
+        legend.text = element_text(size = 9),
+        legend.position = "none")
+
+ZHe_UPb
+ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R.Fig.3.pdf", plot = ZHe_UPb, width = 4, height = 4)
+```
+```{r density plots for Fig 3, echo = F}
+upb.density.3 <- 
+  ggplot() +
+   geom_density(data = all_data, aes(x = Pb207.Pb206_Date), bw = binwidth, fill = "black", alpha = 0.6, adjust = 2) +
+  coord_cartesian(clip = "off") +
+  xlim(0, 3000) +
+  xlab("207Pb/206Pb Date (Ma)") +
+  ylab("Density") +
+  theme_bw() +
+  theme(
+    plot.title = element_text(size=12),
+    axis.text = element_text(size = 9),
+    axis.title = element_text(size = 11))
+upb.density.3
+ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R.Fig.3upb.pdf", plot = upb.density.3, width = 4, height = 2)
+
+zhe.density.3 <- all_data %>%
+  drop_na(ZHe.Report) %>%
+  ggplot() +
+   geom_density(aes(x = ZHe.Report), bw = binwidth, fill = "black", alpha = 0.6, adjust = 2) +
+  coord_cartesian(clip = "off") +
+  xlim(0, 2000) +
+  xlab("ZHe Date (Ma)") +
+  ylab("Density") +
+  theme_bw() +
+  theme(
+    plot.title = element_text(size=12),
+    axis.text = element_text(size = 9),
+    axis.title = element_text(size = 11))
+zhe.density.3
+ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R.Fig.3zhe.pdf", plot = zhe.density.3, width = 4, height = 2)
+```
+
+```{r ZHe vs. UPb plot Ft consideration, echo = FALSE}
+ZHe_UPb_FT <- ZHe_plot_data %>%
+  mutate(FT_date_plot = case_when(is.na(Corrected_Date.No.FT.Inheritance) == F ~ Corrected_Date.No.FT.Inheritance,
+                                  .default = ZHe.Report)) %>%
+  mutate(FT_date_plot.1s = case_when(is.na(Corrected_Date.No.FT.Inheritance) == F ~ Corrected.Date.No.FT.Inheritance.Analytical.Uncertainty.1s,
+                                  .default = ZHe.Report.1s)) %>%
+  mutate(FT.Applied = case_when(is.na(Corrected_Date.No.FT.Inheritance) == F ~ "Since Deposition Only",
+                                .default = FT.Applied)) %>%
+  ggplot(aes(x = Pb207.Pb206_Date, y = FT_date_plot, xmin = Pb207.Pb206_Date - Pb207.Pb206_Date.2SE, xmax = Pb207.Pb206_Date + Pb207.Pb206_Date.2SE, ymin = FT_date_plot - FT_date_plot.1s, ymax = FT_date_plot + FT_date_plot.1s, shape = FT.Applied, colour =  Max.Alpha.Dose, alpha = Opacity)) +
+  annotate("rect", xmin = 980, xmax = 1010, ymin = -Inf, ymax = Inf,
+               alpha = .3, fill = "#997700") + # Rigolet
+  annotate("rect", xmin = 1020, xmax = 1090, ymin = -Inf, ymax = Inf,
+               alpha = .3, fill = "#997700") + # Ottawan
+  annotate("rect", xmin = 1070, xmax = 1110, ymin = -Inf, ymax = Inf,
+               alpha = .3, fill = "#72190E") + # MCR
+  annotate("rect", xmin = 1140, xmax = 1190, ymin = -Inf, ymax = Inf,
+               alpha = .1, fill = "#997700") + # Shawinigan
+  annotate("rect", xmin = 1200, xmax = 1250, ymin = -Inf, ymax = Inf,
+               alpha = .1, fill = "#997700") + # Elezevirian
+  annotate("rect", xmin = 1300, xmax = 1360, ymin = -Inf, ymax = Inf,
+               alpha = .1, fill = "#332288") + #Pre-Elzevierian
+  annotate("rect", xmin = 1340, xmax = 1370, ymin = -Inf, ymax = Inf,
+               alpha = .1, fill = "#332288") + # SGGRP south
+  annotate("rect", xmin = 1380, xmax = 1520, ymin = -Inf, ymax = Inf,
+               alpha = .1, fill = "#332288") + # EGGRP from south + east
+  annotate("rect", xmin = 1600, xmax = 1700, ymin = -Inf, ymax = Inf,
+               alpha = .3, fill = "#225555") + # Mazatzal, from west
+  annotate("rect", xmin = 1820, xmax = 1880, ymin = -Inf, ymax = Inf,
+               alpha = .3, fill = "#225555") + # Penokean from S and E
+  # annotate("rect", xmin = 1800, xmax = 2000, ymin = -Inf, ymax = Inf,
+  #              alpha = .1, fill = "green") + # Trans Hudson Orogen from west or recycled
+  annotate("rect", xmin = 2700, xmax = 3000, ymin = -Inf, ymax = Inf,
+               alpha = .3, fill = "#225555") + # Superior Province from N
+  # y axis
+    annotate("rect", ymin = 980, ymax = 1010, xmin = -Inf, xmax = Inf,
+               alpha = .3, fill = "#997700") + # Rigolet
+  annotate("rect", ymin = 1020, ymax = 1090, xmin = -Inf, xmax = Inf,
+               alpha = .3, fill = "#997700") + # Ottawan
+  annotate("rect", ymin = 1070, ymax = 1110, xmin = -Inf, xmax = Inf,
+               alpha = .3, fill = "#72190E") + # MCR
+  annotate("rect", ymin = 1140, ymax = 1190, xmin = -Inf, xmax = Inf,
+               alpha = .1, fill = "#997700") + # Shawinigan
+  annotate("rect", ymin = 1200, ymax = 1250, xmin = -Inf, xmax = Inf,
+               alpha = .1, fill = "#997700") + # Elezevirian
+  annotate("rect", ymin = 1300, ymax = 1360, xmin = -Inf, xmax = Inf,
+               alpha = .1, fill = "#332288") + #Pre-Elzevierian
+  annotate("rect", ymin = 1340, ymax = 1370, xmin = -Inf, xmax = Inf,
+               alpha = .1, fill = "#332288") + # SGGRP south
+  annotate("rect", ymin = 1380, ymax = 1520, xmin = -Inf, xmax = Inf,
+               alpha = .1, fill = "#332288") + # EGGRP from south + east
+  annotate("rect", ymin = 1600, ymax = 1700, xmin = -Inf, xmax = Inf,
+               alpha = .3, fill = "#225555") + # Mazatzal, from west
+  annotate("rect", ymin = 1820, ymax = 1880, xmin = -Inf, xmax = Inf,
+               alpha = .3, fill = "#225555") + # Penokean from S and E
+  # annotate("rect", ymin = 1800, ymax = 2000, xmin = -Inf, xmax = Inf,
+  #              alpha = .1, fill = "green") + # Trans Hudson Orogen from west or recycled
+  annotate("rect", ymin = 2700, ymax = 3000, xmin = -Inf, xmax = Inf,
+               alpha = .3, fill = "#225555") + # Superior
+  annotate("rect", xmax = Inf, xmin = - Inf, ymin = 985.5-35.8, ymax = 992.51 + 0.64, fill = "#437DBF", alpha = 0.4) +
+  geom_hline(yintercept = 992.51, linewidth = 0.5, color = "#437DBF") +
+  annotate("rect", ymax = Inf, ymin = - Inf, xmin = 985.5-35.8, xmax = 992.51 + 0.64, fill = "#437DBF", alpha = 0.4) +
+  geom_vline(xintercept = 992.51, linewidth = 0.5, color = "#437DBF") +
+  # annotate("rect", xmin = -Inf, xmax = Inf, ymin = 980, ymax = 1250,
+  #              alpha = .1, fill = "orange") + 
+  # annotate("rect", xmin = 980, xmax = 1250, ymin = -Inf, ymax = Inf,
+  #              alpha = .1, fill = "orange") +
+  # annotate("rect", xmin = -Inf, xmax = Inf, ymin = 1350, ymax = 1500,
+  #              alpha = .1, fill = "pink") + 
+  # annotate("rect", xmin = 1350, xmax = 1500, ymin = -Inf, ymax = Inf,
+  #              alpha = .1, fill = "pink") +
+  geom_abline(slope = 1,  linewidth = 0.5, color = "black", linetype = "dashed") +
+  geom_errorbar(aes(width = 0)) +
+  geom_errorbarh(aes(height = 0)) +
+  geom_point(size = 2) +
+  #scale_color_viridis(option = "C", transform = "log", limits = c(10, 2000), breaks = c(10, 100, 1000), name = "eU (ppm)") +
+  #scale_color_viridis(trans = "log", limits = c(5, 780), name = "Max Alpha Dose (a/g x 10^16)") +
+  scale_color_viridis(trans = "log", option = color_scale, limits = color_limits, breaks = color_breaks) +
+   #scale_color_viridis(option = color_scale, limits = c(0, 800), breaks = seq(0, 800, 100)) +
+  scale_shape_manual(values = c("No" = 15, "Yes" = 16, "Since Deposition Only" = 17), name = "FT Applied") +
+  scale_alpha_manual(values = c("transparent" = 0.4, "opaque" = 1), guide = "none") +
+  scale_x_continuous(name = "207Pb/206Pb Date (Ma)", limits=c(0, 3500), breaks = seq(0, 3000, 500)) +
+  scale_y_continuous(name = "ZHe Date (Ma)", limits=c(0, 2400), breaks = seq(0, 2000, 200)) + 
+  theme(panel.background = element_rect(fill = "transparent", colour = "transparent", linewidth = 0.75),
+        panel.border = element_rect(fill = NA, color = "black", linewidth = 0.75),
+        axis.ticks = element_line(colour = "black", linewidth = 0.5),
+        axis.ticks.length = unit(-0.2,"cm"),
+        axis.text = element_text(size = 9),
+        axis.title = element_text(size = 11),
+        plot.margin = grid::unit(c(0,0,0,0), "mm"),
+        legend.background = element_rect(fill = NA, colour = NA),
+        legend.key = element_blank(),
+        legend.text = element_text(size = 9),
+        legend.position = "none")
+
+ZHe_UPb_FT
+ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R.Fig.S3.pdf", plot = ZHe_UPb_FT, width = 4, height = 4)
+```
+```{r ZHe_FT vs. ZHe plot consideration, echo = FALSE}
+ZHe_FT_comp <- ZHe_plot_data %>%
+  mutate(FT_date_plot = case_when(is.na(Corrected_Date.No.FT.Inheritance) == F ~ Corrected_Date.No.FT.Inheritance,
+                                  .default = ZHe.Report)) %>%
+  mutate(FT_date_plot.1s = case_when(is.na(Corrected_Date.No.FT.Inheritance) == F ~ Corrected.Date.No.FT.Inheritance.Analytical.Uncertainty.1s,
+                                  .default = ZHe.Report.1s)) %>%
+  mutate(FT.Applied = case_when(is.na(Corrected_Date.No.FT.Inheritance) == F ~ "Since Deposition Only",
+                                .default = FT.Applied)) %>%
+  drop_na(Corrected_Date.No.FT.Inheritance) %>%
+  ggplot(aes(x = ZHe.Report, y = FT_date_plot, xmin = ZHe.Report - ZHe.Report.1s, xmax = ZHe.Report + ZHe.Report.1s, ymin = FT_date_plot - FT_date_plot.1s, ymax = FT_date_plot + FT_date_plot.1s, shape = FT.Applied, colour =  Max.Alpha.Dose, alpha = Opacity)) +
+  annotate("rect", xmin = 980, xmax = 1010, ymin = -Inf, ymax = Inf,
+               alpha = .3, fill = "#997700") + # Rigolet
+  annotate("rect", xmin = 1020, xmax = 1090, ymin = -Inf, ymax = Inf,
+               alpha = .3, fill = "#997700") + # Ottawan
+  annotate("rect", xmin = 1070, xmax = 1110, ymin = -Inf, ymax = Inf,
+               alpha = .3, fill = "#72190E") + # MCR
+  annotate("rect", xmin = 1140, xmax = 1190, ymin = -Inf, ymax = Inf,
+               alpha = .1, fill = "#997700") + # Shawinigan
+  annotate("rect", xmin = 1200, xmax = 1250, ymin = -Inf, ymax = Inf,
+               alpha = .1, fill = "#997700") + # Elezevirian
+  annotate("rect", xmin = 1300, xmax = 1360, ymin = -Inf, ymax = Inf,
+               alpha = .1, fill = "#332288") + #Pre-Elzevierian
+  annotate("rect", xmin = 1340, xmax = 1370, ymin = -Inf, ymax = Inf,
+               alpha = .1, fill = "#332288") + # SGGRP south
+  annotate("rect", xmin = 1380, xmax = 1520, ymin = -Inf, ymax = Inf,
+               alpha = .1, fill = "#332288") + # EGGRP from south + east
+  annotate("rect", xmin = 1600, xmax = 1700, ymin = -Inf, ymax = Inf,
+               alpha = .3, fill = "#225555") + # Mazatzal, from west
+  annotate("rect", xmin = 1820, xmax = 1880, ymin = -Inf, ymax = Inf,
+               alpha = .3, fill = "#225555") + # Penokean from S and E
+  # annotate("rect", xmin = 1800, xmax = 2000, ymin = -Inf, ymax = Inf,
+  #              alpha = .1, fill = "green") + # Trans Hudson Orogen from west or recycled
+  annotate("rect", xmin = 2700, xmax = 3000, ymin = -Inf, ymax = Inf,
+               alpha = .3, fill = "#225555") + # Superior Province from N
+  # y axis
+    annotate("rect", ymin = 980, ymax = 1010, xmin = -Inf, xmax = Inf,
+               alpha = .3, fill = "#997700") + # Rigolet
+  annotate("rect", ymin = 1020, ymax = 1090, xmin = -Inf, xmax = Inf,
+               alpha = .3, fill = "#997700") + # Ottawan
+  annotate("rect", ymin = 1070, ymax = 1110, xmin = -Inf, xmax = Inf,
+               alpha = .3, fill = "#72190E") + # MCR
+  annotate("rect", ymin = 1140, ymax = 1190, xmin = -Inf, xmax = Inf,
+               alpha = .1, fill = "#997700") + # Shawinigan
+  annotate("rect", ymin = 1200, ymax = 1250, xmin = -Inf, xmax = Inf,
+               alpha = .1, fill = "#997700") + # Elezevirian
+  annotate("rect", ymin = 1300, ymax = 1360, xmin = -Inf, xmax = Inf,
+               alpha = .1, fill = "#332288") + #Pre-Elzevierian
+  annotate("rect", ymin = 1340, ymax = 1370, xmin = -Inf, xmax = Inf,
+               alpha = .1, fill = "#332288") + # SGGRP south
+  annotate("rect", ymin = 1380, ymax = 1520, xmin = -Inf, xmax = Inf,
+               alpha = .1, fill = "#332288") + # EGGRP from south + east
+  annotate("rect", ymin = 1600, ymax = 1700, xmin = -Inf, xmax = Inf,
+               alpha = .3, fill = "#225555") + # Mazatzal, from west
+  annotate("rect", ymin = 1820, ymax = 1880, xmin = -Inf, xmax = Inf,
+               alpha = .3, fill = "#225555") + # Penokean from S and E
+  # annotate("rect", ymin = 1800, ymax = 2000, xmin = -Inf, xmax = Inf,
+  #              alpha = .1, fill = "green") + # Trans Hudson Orogen from west or recycled
+  annotate("rect", ymin = 2700, ymax = 3000, xmin = -Inf, xmax = Inf,
+               alpha = .3, fill = "#225555") + # Superior
+  annotate("rect", xmax = Inf, xmin = - Inf, ymin = 985.5-35.8, ymax = 992.51 + 0.64, fill = "#437DBF", alpha = 0.4) +
+  geom_hline(yintercept = 992.51, linewidth = 0.5, color = "#437DBF") +
+  annotate("rect", ymax = Inf, ymin = - Inf, xmin = 985.5-35.8, xmax = 992.51 + 0.64, fill = "#437DBF", alpha = 0.4) +
+  geom_vline(xintercept = 992.51, linewidth = 0.5, color = "#437DBF") +
+  # annotate("rect", xmin = -Inf, xmax = Inf, ymin = 980, ymax = 1250,
+  #              alpha = .1, fill = "orange") + 
+  # annotate("rect", xmin = 980, xmax = 1250, ymin = -Inf, ymax = Inf,
+  #              alpha = .1, fill = "orange") +
+  # annotate("rect", xmin = -Inf, xmax = Inf, ymin = 1350, ymax = 1500,
+  #              alpha = .1, fill = "pink") + 
+  # annotate("rect", xmin = 1350, xmax = 1500, ymin = -Inf, ymax = Inf,
+  #              alpha = .1, fill = "pink") +
+  geom_abline(slope = 1,  linewidth = 0.5, color = "black", linetype = "dashed") +
+  geom_errorbar(aes(width = 0)) +
+  geom_errorbarh(aes(height = 0)) +
+  geom_point(size = 2) +
+  #scale_color_viridis(option = "C", transform = "log", limits = c(10, 2000), breaks = c(10, 100, 1000), name = "eU (ppm)") +
+  #scale_color_viridis(trans = "log", limits = c(5, 780), name = "Max Alpha Dose (a/g x 10^16)") +
+  scale_color_viridis(trans = "log", option = color_scale, limits = color_limits, breaks = color_breaks) +
+   #scale_color_viridis(option = color_scale, limits = c(0, 800), breaks = seq(0, 800, 100)) +
+  scale_shape_manual(values = c("No" = 15, "Yes" = 16, "Since Deposition Only" = 17), name = "FT Applied") +
+  scale_alpha_manual(values = c("transparent" = 0.4, "opaque" = 1), guide = "none") +
+  scale_x_continuous(name = "ZHe Date, Normal FT Correction (Ma)", limits=c(900, 1700), breaks = seq(900, 1700, 200)) +
+  scale_y_continuous(name = "ZHe Date, FT Correction Since Deposition Only (Ma)", limits=c(900, 1700), breaks = seq(900, 1700, 200)) + 
+  theme(panel.background = element_rect(fill = "transparent", colour = "transparent", linewidth = 0.75),
+        panel.border = element_rect(fill = NA, color = "black", linewidth = 0.75),
+        axis.ticks = element_line(colour = "black", linewidth = 0.5),
+        axis.ticks.length = unit(-0.2,"cm"),
+        axis.text = element_text(size = 9),
+        axis.title = element_text(size = 11),
+        plot.margin = grid::unit(c(0,0,0,0), "mm"),
+        legend.background = element_rect(fill = NA, colour = NA),
+        legend.key = element_blank(),
+        legend.text = element_text(size = 9),
+        legend.position = "none")
+
+ZHe_FT_comp
+ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R.Fig.S3_inset.pdf", plot = ZHe_FT_comp, width = 2.5, height = 2.5)
+```
+```{r ZHe_FT vs. ZHe plot consideration zoomed in, echo = FALSE}
+ZHe_FT_comp_zoom <- ZHe_plot_data %>%
+  mutate(FT_date_plot = case_when(is.na(Corrected_Date.No.FT.Inheritance) == F ~ Corrected_Date.No.FT.Inheritance,
+                                  .default = ZHe.Report)) %>%
+  mutate(FT_date_plot.1s = case_when(is.na(Corrected_Date.No.FT.Inheritance) == F ~ Corrected.Date.No.FT.Inheritance.Analytical.Uncertainty.1s,
+                                  .default = ZHe.Report.1s)) %>%
+  mutate(FT.Applied = case_when(is.na(Corrected_Date.No.FT.Inheritance) == F ~ "Since Deposition Only",
+                                .default = FT.Applied)) %>%
+  drop_na(Corrected_Date.No.FT.Inheritance) %>%
+  filter(ZHe.Report < 1300) %>%
+  ggplot(aes(x = ZHe.Report, y = FT_date_plot, xmin = ZHe.Report - ZHe.Report.1s, xmax = ZHe.Report + ZHe.Report.1s, ymin = FT_date_plot - FT_date_plot.1s, ymax = FT_date_plot + FT_date_plot.1s, shape = FT.Applied, colour =  Max.Alpha.Dose, alpha = Opacity)) +
+  annotate("rect", xmin = 980, xmax = 1010, ymin = -Inf, ymax = Inf,
+               alpha = .3, fill = "#997700") + # Rigolet
+  annotate("rect", xmin = 1020, xmax = 1090, ymin = -Inf, ymax = Inf,
+               alpha = .3, fill = "#997700") + # Ottawan
+  annotate("rect", xmin = 1070, xmax = 1110, ymin = -Inf, ymax = Inf,
+               alpha = .3, fill = "#72190E") + # MCR
+  annotate("rect", xmin = 1140, xmax = 1190, ymin = -Inf, ymax = Inf,
+               alpha = .1, fill = "#997700") + # Shawinigan
+  annotate("rect", xmin = 1200, xmax = 1250, ymin = -Inf, ymax = Inf,
+               alpha = .1, fill = "#997700") + # Elezevirian
+  annotate("rect", xmin = 1300, xmax = 1360, ymin = -Inf, ymax = Inf,
+               alpha = .1, fill = "#332288") + #Pre-Elzevierian
+  # y axis
+    annotate("rect", ymin = 980, ymax = 1010, xmin = -Inf, xmax = Inf,
+               alpha = .3, fill = "#997700") + # Rigolet
+  annotate("rect", ymin = 1020, ymax = 1090, xmin = -Inf, xmax = Inf,
+               alpha = .3, fill = "#997700") + # Ottawan
+  annotate("rect", ymin = 1070, ymax = 1110, xmin = -Inf, xmax = Inf,
+               alpha = .3, fill = "#72190E") + # MCR
+  annotate("rect", ymin = 1140, ymax = 1190, xmin = -Inf, xmax = Inf,
+               alpha = .1, fill = "#997700") + # Shawinigan
+  annotate("rect", ymin = 1200, ymax = 1250, xmin = -Inf, xmax = Inf,
+               alpha = .1, fill = "#997700") + # Elezevirian
+  annotate("rect", ymin = 1300, ymax = 1360, xmin = -Inf, xmax = Inf,
+               alpha = .1, fill = "#332288") + #Pre-Elzevierian
+  annotate("rect", xmax = Inf, xmin = - Inf, ymin = 985.5-35.8, ymax = 992.51 + 0.64, fill = "#437DBF", alpha = 0.4) +
+  geom_hline(yintercept = 992.51, linewidth = 0.5, color = "#437DBF") +
+  annotate("rect", ymax = Inf, ymin = - Inf, xmin = 985.5-35.8, xmax = 992.51 + 0.64, fill = "#437DBF", alpha = 0.4) +
+  geom_vline(xintercept = 992.51, linewidth = 0.5, color = "#437DBF") +
+  # annotate("rect", xmin = -Inf, xmax = Inf, ymin = 980, ymax = 1250,
+  #              alpha = .1, fill = "orange") + 
+  # annotate("rect", xmin = 980, xmax = 1250, ymin = -Inf, ymax = Inf,
+  #              alpha = .1, fill = "orange") +
+  # annotate("rect", xmin = -Inf, xmax = Inf, ymin = 1350, ymax = 1500,
+  #              alpha = .1, fill = "pink") + 
+  # annotate("rect", xmin = 1350, xmax = 1500, ymin = -Inf, ymax = Inf,
+  #              alpha = .1, fill = "pink") +
+  geom_abline(slope = 1,  linewidth = 0.5, color = "black", linetype = "dashed") +
+  geom_errorbar(aes(width = 0)) +
+  geom_errorbarh(aes(height = 0)) +
+  geom_point(size = 2) +
+  #scale_color_viridis(option = "C", transform = "log", limits = c(10, 2000), breaks = c(10, 100, 1000), name = "eU (ppm)") +
+  #scale_color_viridis(trans = "log", limits = c(5, 780), name = "Max Alpha Dose (a/g x 10^16)") +
+  scale_color_viridis(trans = "log", option = color_scale, limits = color_limits, breaks = color_breaks) +
+   #scale_color_viridis(option = color_scale, limits = c(0, 800), breaks = seq(0, 800, 100)) +
+  scale_shape_manual(values = c("None" = 15, "Conventional" = 16, "Since Deposition Only" = 17), name = "FT Applied") +
+  scale_alpha_manual(values = c("transparent" = 0.4, "opaque" = 1), guide = "none") +
+  scale_x_continuous(name = "ZHe Date, Conventional FT Correction (Ma)", limits=c(900, 1300), breaks = seq(900, 1300, 100)) +
+  scale_y_continuous(name = "ZHe Date FR Correction Since Deposition Only (Ma)", limits=c(900, 1300), breaks = seq(900, 1300, 100)) + 
+  theme(panel.background = element_rect(fill = "transparent", colour = "transparent", linewidth = 0.75),
+        panel.border = element_rect(fill = NA, color = "black", linewidth = 0.75),
+        axis.ticks = element_line(colour = "black", linewidth = 0.5),
+        axis.ticks.length = unit(-0.2,"cm"),
+        axis.text = element_text(size = 9),
+        axis.title = element_text(size = 11),
+        plot.margin = grid::unit(c(0,0,0,0), "mm"),
+        legend.background = element_rect(fill = NA, colour = NA),
+        legend.key = element_blank(),
+        legend.text = element_text(size = 9),
+        legend.position = "none")
+
+ZHe_FT_comp_zoom
+ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R.Fig.S3_zoom.pdf", plot = ZHe_FT_comp_zoom, width = 4, height = 4)
+```
+```{r ZHe cumulative density function plot, echo = F}
+ZHe_cdf_data <- ZHe_plot_data %>%
+  filter(Fragment == "No") %>%
+  mutate(FT_date_plot = case_when(is.na(Corrected_Date.No.FT.Inheritance) == F ~ Corrected_Date.No.FT.Inheritance,
+                                  .default = ZHe.Report)) %>%
+  mutate(FT_date_plot.1s = case_when(is.na(Corrected_Date.No.FT.Inheritance) == F ~ Corrected.Date.No.FT.Inheritance.Analytical.Uncertainty.1s,
+                                  .default = ZHe.Report.1s)) %>%
+  mutate(FT.Applied = case_when(is.na(Corrected_Date.No.FT.Inheritance) == F ~ "Since Deposition Only",
+                                .default = FT.Applied)) %>%
+  select(c(Run, Sample, Grain, Fragment, Uncorrected.Date, ZHe.Report, FT_date_plot, FT.Applied))  %>%
+  pivot_longer(cols = c(Uncorrected.Date, ZHe.Report, FT_date_plot), names_to = "Date_Type", values_to = "Date") %>%
+  mutate("FT_cor" = case_when(Date_Type == "Uncorrected.Date" ~ "None",
+                              Date_Type == "ZHe.Report" ~ "Conventional (Entire History)",
+                              .default = "Since Deposition Only")) %>%
+  mutate(FT_cor = factor(FT_cor, levels = c("None", "Conventional (Entire History)", "Since Deposition Only")))
+
+### KS tests ----
+ft_none <- ZHe_cdf_data %>%
+  filter(Date_Type == "Uncorrected.Date")
+ft_conventional <- ZHe_cdf_data %>%
+  filter(Date_Type == "ZHe.Report")
+ft_deposition <- ZHe_cdf_data %>%
+  filter(Date_Type == "FT_date_plot")
+ks_none <- ks.test(x = ft_conventional$Date, y = ft_none$Date, alternative = "two.sided")
+ks_deposition <- ks.test(x = ft_conventional$Date, y = ft_deposition$Date, alternative = "two.sided")
+
+zhe_cdf <- ZHe_cdf_data %>%
+  ggplot(aes(x = Date, group = FT_cor, color = FT_cor)) +
+  annotate("rect", ymax = Inf, ymin = - Inf, xmin = 985.5-35.8, xmax = 992.51 + 0.64, fill = "#437DBF", alpha = 0.4) +
+  geom_vline(xintercept = 992.51, linewidth = 0.5, color = "#437DBF") +
+  stat_ecdf() +
+  coord_cartesian(clip = "off") +
+  xlim(00, 2000) +
+  xlab("ZHe Date (Ma)") +
+  #scale_x_continuous(name = "207Pb/206Pb Date (Ma)", breaks = seq(1000, 3000, 500)) +
+  scale_color_manual(values = c("None" = "gray", "Conventional (Entire History)" = "black", "Since Deposition Only" = "red"), name = "FT Correction") +
+  scale_y_continuous(name = "Cumulative Distribution Function", labels = scales::label_number(accuracy = 0.001)) +
+  annotate("text", x = 1200, y = 0.26, label = paste("n =", nrow(ZHe_cdf_data)/nlevels(ZHe_cdf_data$FT_cor), sep = " "), colour =  "black", hjust = 0) +
+  annotate("text", x = 1200, y = 0.20, label = paste("K-S p-value =", signif(ks_none$p.value, 2)), colour =  "gray", hjust = 0) +
+  annotate("text", x = 1200, y = 0.14, label = paste("K-S p-value =", signif(ks_deposition$p.value, 2)), colour =  "red", hjust = 0) +
+  theme_bw() +
+  theme(legend.background = element_rect(fill = NA, colour = NA),
+        legend.key = element_blank(),
+        legend.position = c(0.75,0.5),
+        legend.text = element_text(size = 9),
+        legend.title = element_text(size = 9),
+    plot.title = element_text(size=12),
+    axis.text = element_text(size = 9),
+    axis.title = element_text(size = 11))
+  # theme(panel.background = element_rect(fill = "transparent", colour = "transparent", linewidth = 0.75),
+  #       panel.border = element_rect(fill = NA, color = "black", linewidth = 0.75),
+  #       axis.ticks = element_line(colour = "black", linewidth = 0.5),
+  #       axis.ticks.length = unit(-0.2,"cm"),
+  #       axis.text = element_text(size = 9),
+  #       axis.title = element_text(size = 11),
+  #       plot.margin = grid::unit(c(0,0,0,0), "mm"),
+  #       legend.background = element_rect(fill = NA, colour = NA),
+  #       legend.key = element_blank(),
+  #       legend.position = c(0.85,0.75),
+  #       legend.text = element_text(size = 9),
+  #       legend.title = element_text(size = 11))
+zhe_cdf
+
+ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R.Fig.S2C.pdf", plot = zhe_cdf, width = 6.5, height = 3)
+```
+```{r model plots, echo = F}
+```
