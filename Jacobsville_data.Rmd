@@ -37,10 +37,9 @@ upb_data_3 <- read.xlsx("/Users/barrapeak/Dropbox/Thermo-Detrital/Data/U_Pb_all_
   drop_na(Final.Pb207.U235_mean)
 
 # load helium analytical data
-he_input_data <- read.xlsx("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Data/jacobsvilleall_values.xlsx", startRow = 1, colNames = TRUE, check.names = TRUE, sep.names = "_") # load data using full file path. this file is just input and measured data, no dates
+he_input_data <- read.xlsx("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Data/2026_01_19all_values.xlsx", startRow = 1, colNames = TRUE, check.names = TRUE, sep.names = "_") # load data using full file path. this file is just input and measured data, no dates
 
-he_nmol <- read.xlsx("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Data/jacobsvillehelcalc_input_file.xlsx", startRow = 1, colNames = TRUE, check.names = TRUE, sep.names = ".") # load hecalc input values for date calculation
-
+he_nmol <- read.xlsx("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Data/2026_01_19helcalc_input_file_GEOM.xlsx", startRow = 1, colNames = TRUE, check.names = TRUE, sep.names = ".") # load hecalc input values for date calculation
 
 ```
 
@@ -168,26 +167,8 @@ hecalc_header <- c("Sample", "fmol 4He", "±", "mol 4He", "±",
                    "ng 147Sm", "±", "mol 147Sm", "±",
                    "238Ft" ,"±", "235Ft", "±", "232Ft", "±", "147Ft", "±")
 
-no_inheritance_hecalc <- date_no_inheritance_data %>%
-  mutate("Sample" = paste(Laser_Session, Grain, sep = "_")) %>%
-  select(c("Sample", "fmol.4He", "X.", "mol.4He", "X..1", "ng.238U", "X..2",
-           "mol.238U", "X..3", "ng.232Th", "X..4", "mol.232Th", "X..5", "ng.147Sm", "X..6", "mol.147Sm", "X..7", "X238Ft", "X..8", "X235Ft", "X..9",
-           "X232Ft", "X..10", "X147Ft", "X..11"))
-colnames(no_inheritance_hecalc) <- hecalc_header
-
-write.xlsx(no_inheritance_hecalc, paste("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Data/", "no_inh_hecalc_in_3.xlsx", sep = ""))
-
-no_inheritance_grayzone <- grayzone_data %>%
-  mutate("Sample" = paste(Laser_Session, Grain, sep = "_")) %>%
-  select(c("Sample", "fmol.4He", "X.", "mol.4He", "X..1", "ng.238U", "X..2",
-           "mol.238U", "X..3", "ng.232Th", "X..4", "mol.232Th", "X..5", "ng.147Sm", "X..6", "mol.147Sm", "X..7", "X238Ft", "X..8", "X235Ft", "X..9",
-           "X232Ft", "X..10", "X147Ft", "X..11"))
-colnames(no_inheritance_grayzone) <- hecalc_header
-
-write.xlsx(no_inheritance_grayzone, paste("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Data/", "gz_no_inh_hecalc_in_3.xlsx", sep = ""))
-
 date_inheritance_data <- inherited_data %>%
-  mutate("Sample" = paste(Laser_Session, Grain, sep = "_")) %>%
+  mutate("Sample" = paste(Run, Grain, sep = "_")) %>%
   mutate(mol.4He = mol.4He-mol.4He.d,
          X..1 = sqrt(X..1^2 + mol.4He.d.unc^2),
          mol.238U = mol.238Ud, X..3 = mol.238Ud.unc,
@@ -204,11 +185,11 @@ date_inheritance_data <- inherited_data %>%
            "X232Ft", "X..10", "X147Ft", "X..11"))
 colnames(date_inheritance_data) = hecalc_header
 
-write.xlsx(date_inheritance_data, paste("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Data/", "inh_hecalc_in_3.xlsx", sep = ""))
+write.xlsx(date_inheritance_data, paste("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Data/", "inh_hecalc_in_2026_01_19.xlsx", sep = ""))
 
 # possible inheritance. uses maximum possible He pre deposition
 gz_inheritance_data <- grayzone_data %>%
-  mutate("Sample" = paste(Laser_Session, Grain, sep = "_")) %>%
+  mutate("Sample" = paste(Run, Grain, sep = "_")) %>%
   mutate(mol.4He = (mol.4He + X..1) - (mol.4He.d - mol.4He.d.unc),
          X..1 = sqrt(X..1^2 + mol.4He.d.unc^2),
          mol.238U = mol.238Ud, X..3 = mol.238Ud.unc,
@@ -225,27 +206,27 @@ gz_inheritance_data <- grayzone_data %>%
            "X232Ft", "X..10", "X147Ft", "X..11"))
 colnames(gz_inheritance_data) = hecalc_header
 
-write.xlsx(gz_inheritance_data, paste("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Data/", "gz_inh_hecalc_in_3.xlsx", sep = ""))
+write.xlsx(gz_inheritance_data, paste("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Data/", "gz_inh_hecalc_in_2026_01_19.xlsx", sep = ""))
 
 ```
 ```{r load HeCalc date outputs}
-all_FT_dates <- read.xlsx("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Data/jacobsville_allFT_helcalc_op.xlsx", startRow = 3, colNames = TRUE, check.names = TRUE, sep.names = "_") %>%
+all_FT_dates <- read.xlsx("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Data/2026_01_19helcalc_output_GEOM.xlsx", startRow = 3, colNames = TRUE, check.names = TRUE, sep.names = "_") %>%
   select(!starts_with("M")) %>%
   select(!starts_with("N"))
 colnames(all_FT_dates) <- paste(colnames(all_FT_dates),"all_FT", sep = "_")
 all_FT_dates <- all_FT_dates %>%
   rename("Grain" ="Sample_all_FT")
 
-all_FT_analytical <- read.xlsx("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Data/jacobsville_hecalc_analytic_op.xlsx", startRow = 3, colNames = TRUE, check.names = TRUE, sep.names = "_") %>%
+all_FT_analytical <- read.xlsx("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Data/2026_01_19helcalc_output_Analytical.xlsx", startRow = 3, colNames = TRUE, check.names = TRUE, sep.names = "_") %>%
     select(!starts_with("M")) %>%
   select(!starts_with("N"))
 colnames(all_FT_analytical) <- paste(colnames(all_FT_analytical),"all_analytical", sep = "_")
 all_FT_analytical <- all_FT_analytical %>%
   rename("Grain" ="Sample_all_analytical")
 
-inh_dates <- read.xlsx("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Data/inh_hecalc_op_3.xlsx", startRow = 3, colNames = TRUE, check.names = TRUE, sep.names = "_")
+inh_dates <- read.xlsx("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Data/inh_hecalc_out_2026_01_19.xlsx", startRow = 3, colNames = TRUE, check.names = TRUE, sep.names = "_")
 
-gz_inh_dates <- read.xlsx("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Data/gz_inh_hecalc_op_4.xlsx", startRow = 3, colNames = TRUE, check.names = TRUE, sep.names = "_")
+gz_inh_dates <- read.xlsx("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Data/gz_inh_hecalc_out_2026_01_19.xlsx", startRow = 3, colNames = TRUE, check.names = TRUE, sep.names = "_")
 
 inh_dates <- rbind(inh_dates, gz_inh_dates) %>%
   arrange(Sample) %>%
@@ -253,7 +234,13 @@ inh_dates <- rbind(inh_dates, gz_inh_dates) %>%
   select(!starts_with("N"))
 colnames(inh_dates) <- paste(colnames(inh_dates), "inh_FT", sep = "_")
 inh_dates <- inh_dates %>%
-  rename("Grain" ="Sample_inh_FT")
+  separate_wider_delim(Sample_inh_FT, "_", names = c("Run", "Grain")) %>%
+  mutate(Grain = case_when(nchar(Grain) == 1 ~ paste("z00",Grain, sep = ""),
+                           nchar(Grain) == 2 ~ paste("z0", Grain, sep = ""),
+                           .default = paste("z", Grain, sep = ""))) %>%
+  mutate(Grain = paste(Run, Grain, sep = "_")) %>%
+  select(!c("Run"))
+  
 ```
 ```{r merge Hecalc outputs}
 td <- (992.51+0.64 - (((992.51 + 0.64) - (985.5- 35.8))/2)) *10^6 # maximum depositonal age in yr
@@ -420,7 +407,7 @@ colnames(he_print) <- c("Runab", "Sample", "Grainc", "Length 1d", "Width 1e",
 ```{r write and save tables as xlsx}
 # human reader file add sheets ---
 write.xlsx(print_upb, "/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/data_tables_S1.xlsx", sheetName = "Table S1. U-Pb Data")
-write.xlsx(he_print, "/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/data_tables_S4.xlsx", sheetName = "Sheet1")
+write.xlsx(he_print, "/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/data_tables_S4_2026_01_19.xlsx", sheetName = "Sheet1")
 
 # repository file add sheets ----
 write.xlsx(repository_upb, "/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/repository_data_tables.xlsx",
