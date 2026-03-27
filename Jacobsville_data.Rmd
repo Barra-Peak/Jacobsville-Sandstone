@@ -37,9 +37,9 @@ upb_data_3 <- read.xlsx("/Users/barrapeak/Dropbox/Thermo-Detrital/Data/U_Pb_all_
   drop_na(Final.Pb207.U235_mean)
 
 # load helium analytical data
-he_input_data <- read.xlsx("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Data/2026_01_19all_values.xlsx", startRow = 1, colNames = TRUE, check.names = TRUE, sep.names = "_") # load data using full file path. this file is just input and measured data, no dates
+he_input_data <- read.xlsx("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Data/2026_01_21_all_he_values.xlsx", startRow = 1, colNames = TRUE, check.names = TRUE, sep.names = "_") # load data using full file path. this file is just input and measured data, no dates
 
-he_nmol <- read.xlsx("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Data/2026_01_19helcalc_input_file_GEOM.xlsx", startRow = 1, colNames = TRUE, check.names = TRUE, sep.names = ".") # load hecalc input values for date calculation
+he_nmol <- read.xlsx("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Data/2026_01_21_hecalc_GEOM_input.xlsx", startRow = 1, colNames = TRUE, check.names = TRUE, sep.names = ".") # load hecalc input values for date calculation
 
 ```
 
@@ -183,9 +183,6 @@ date_inheritance_data <- inherited_data %>%
   select(c("Sample", "fmol.4He", "X.", "mol.4He", "X..1", "ng.238U", "X..2",
            "mol.238U", "X..3", "ng.232Th", "X..4", "mol.232Th", "X..5", "ng.147Sm", "X..6", "mol.147Sm", "X..7", "X238Ft", "X..8", "X235Ft", "X..9",
            "X232Ft", "X..10", "X147Ft", "X..11"))
-colnames(date_inheritance_data) = hecalc_header
-
-write.xlsx(date_inheritance_data, paste("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Data/", "inh_hecalc_in_2026_01_19.xlsx", sep = ""))
 
 # possible inheritance. uses maximum possible He pre deposition
 gz_inheritance_data <- grayzone_data %>%
@@ -204,33 +201,30 @@ gz_inheritance_data <- grayzone_data %>%
   select(c("Sample", "fmol.4He", "X.", "mol.4He", "X..1", "ng.238U", "X..2",
            "mol.238U", "X..3", "ng.232Th", "X..4", "mol.232Th", "X..5", "ng.147Sm", "X..6", "mol.147Sm", "X..7", "X238Ft", "X..8", "X235Ft", "X..9",
            "X232Ft", "X..10", "X147Ft", "X..11"))
-colnames(gz_inheritance_data) = hecalc_header
 
-write.xlsx(gz_inheritance_data, paste("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Data/", "gz_inh_hecalc_in_2026_01_19.xlsx", sep = ""))
+inheritance_ft <- full_join(date_inheritance_data, gz_inheritance_data) %>%
+  filter(fmol.4He > X.) # remove columns with He uncertainty higher than He
+colnames(inheritance_ft) = hecalc_header
 
+write.xlsx(inheritance_ft, paste("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Data/", "inh_FT_hecalc_input.xlsx", sep = ""))
 ```
 ```{r load HeCalc date outputs}
-all_FT_dates <- read.xlsx("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Data/2026_01_19helcalc_output_GEOM.xlsx", startRow = 3, colNames = TRUE, check.names = TRUE, sep.names = "_") %>%
+all_FT_dates <- read.xlsx("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Data/2026_01_21_hecalc_GEOM_output.xlsx", startRow = 3, colNames = TRUE, check.names = TRUE, sep.names = "_") %>%
   select(!starts_with("M")) %>%
   select(!starts_with("N"))
 colnames(all_FT_dates) <- paste(colnames(all_FT_dates),"all_FT", sep = "_")
 all_FT_dates <- all_FT_dates %>%
   rename("Grain" ="Sample_all_FT")
 
-all_FT_analytical <- read.xlsx("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Data/2026_01_19helcalc_output_Analytical.xlsx", startRow = 3, colNames = TRUE, check.names = TRUE, sep.names = "_") %>%
-    select(!starts_with("M")) %>%
+all_FT_analytical <- read.xlsx("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Data/2026_01_21_hecalc_Analytical_output.xlsx", startRow = 3, colNames = TRUE, check.names = TRUE, sep.names = "_") %>%
+  select(!starts_with("M")) %>%
   select(!starts_with("N"))
 colnames(all_FT_analytical) <- paste(colnames(all_FT_analytical),"all_analytical", sep = "_")
 all_FT_analytical <- all_FT_analytical %>%
   rename("Grain" ="Sample_all_analytical")
 
-inh_dates <- read.xlsx("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Data/inh_hecalc_out_2026_01_19.xlsx", startRow = 3, colNames = TRUE, check.names = TRUE, sep.names = "_")
-
-gz_inh_dates <- read.xlsx("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Data/gz_inh_hecalc_out_2026_01_19.xlsx", startRow = 3, colNames = TRUE, check.names = TRUE, sep.names = "_")
-
-inh_dates <- rbind(inh_dates, gz_inh_dates) %>%
-  arrange(Sample) %>%
-    select(!starts_with("M")) %>%
+inh_dates <- read.xlsx("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Data/inh_FT_hecalc_output.xlsx", startRow = 3, colNames = TRUE, check.names = TRUE, sep.names = "_") %>%
+  select(!starts_with("M")) %>%
   select(!starts_with("N"))
 colnames(inh_dates) <- paste(colnames(inh_dates), "inh_FT", sep = "_")
 inh_dates <- inh_dates %>%
@@ -277,13 +271,20 @@ he_data_clean <- he_data_all
 colnames(he_data_clean) <- new_names
 
 main_he <- full_join(he_data_clean, hecalc_data, by = c("Run", "Sample", "Grain")) %>%
-  select(!starts_with("Inherited"))
+  select(!starts_with("Inherited")) %>%
+  left_join(select(upb_clean, c(Run, Sample, Grain, Final.Pb207.Pb206.age_mean)), by = c("Run", "Sample", "Grain"))
 
 analytical_he <- main_he %>%
   select(!starts_with("mol")) #%>%
   #select(!contains("inh"))
-analytical_he <- analytical_he[ , c(1:50, 67: 72, 74:78)]
-analytical_he <- analytical_he[ , c(1:54, 57:58, 55:56, 59:61)]
+analytical_he <- analytical_he[ , c(1:50, 67: 72, 74:79)]
+analytical_he <- analytical_he[ , c(1:54, 57:58, 55:56, 59:62)] %>%
+  mutate(Rejection.Reason = case_when(Crystal_Fragment. == "No" & Combined_FT < 0.5 ~ "FT < 0.5",
+                               U == 0 ~ "No Uranium",
+                               Crystal_Fragment. == "No" & Corrected_date_all_FT > Final.Pb207.Pb206.age_mean ~ "ZHe date too old",
+                               Crystal_Fragment. == "Yes" & Uncorrected_Date > Final.Pb207.Pb206.age_mean ~ "ZHe date too old",
+                               .default = NA)) %>%
+  select(!c(Final.Pb207.Pb206.age_mean))
 
 colnames(analytical_he) <- c("Run", "Sample", "Grain", "Length.1", "Width.1",
                              "Length.2", "Width.2", "Geometry", "Np", "Length.P", "Width.P", "Grind.Depth", "Orientation", "Fragment", "He4.fmol", "He4.fmol.1s", "U.ng", "U.ng.1s", "Th.ng", "Th.ng.1s", "Sm.ng", "Sm.ng.1s", "Volume", "Volume.1s", "Mass", "Mass.1s", "He4.nmol.g", "Her.nmol.g.1s", "U.ppm", "U.ppm.1s", "Th.ppm", "Th.ppm.1s", "Sm.ppm", "Sm.ppm.1s", "eU", "eU.1s", "RSV", "RSV.1s", "FT238", "FT238.1s","FT235", "FT235.1s", "FT232", "FT232.1s", "FT147", "FT147.1s", "Combined.FT", "Combined.FT.1s", "RFT", "RFT.1s", "Uncorrected.Date",
@@ -293,7 +294,8 @@ colnames(analytical_he) <- c("Run", "Sample", "Grain", "Length.1", "Width.1",
 "Corrected.Date.Analytical.Uncertainty.1s", "Corrected.Date.Analytical.Uncertainty.2s",
 "Corrected.Date.Analytical.FT.Uncertainty.1s", "Corrected.Date.Analytical.FT.Uncertainty.2s",
 "Corrected_Date.No.FT.Inheritance",
-"Corrected.Date.No.FT.Inheritance.Analytical.Uncertainty.1s", "Corrected.Date.No.FT.Inheritance.Analytical.Uncertainty.2s"
+"Corrected.Date.No.FT.Inheritance.Analytical.Uncertainty.1s", "Corrected.Date.No.FT.Inheritance.Analytical.Uncertainty.2s",
+"Rejection.Reason"
 )
 ```
 
@@ -328,9 +330,26 @@ colnames(repository_upb) <- c("Run", "Sample", "Grain", "Spot.Size", "Fluence",
 # He ----
 
 he_print.1 <- analytical_he %>%
+  arrange(Run, Sample, Grain) %>%
   mutate(Run = as.character(Run)) %>%
-  mutate(across(where(is.numeric), ~ signif(.x, 4))) %>% # this makes mass zero which is a problem
-  mutate_all(as.character)
+  mutate(across(where(is.numeric), ~ signif(.x, 4))) %>%
+  mutate_all(as.character) %>%
+  mutate(Corrected.Date = case_when(Fragment == "Yes" ~ NA,
+                                    .default = Corrected.Date)) %>%
+  mutate(Corrected.Date.Analytical.Uncertainty.1s = case_when(Fragment == "Yes" ~ NA,
+                                    .default = Corrected.Date.Analytical.Uncertainty.1s)) %>%
+  mutate(Corrected.Date.Analytical.Uncertainty.2s = case_when(Fragment == "Yes" ~ NA,
+                                    .default = Corrected.Date.Analytical.Uncertainty.2s)) %>%
+  mutate(Corrected.Date.Analytical.FT.Uncertainty.2s = case_when(Fragment == "Yes" ~ NA,
+                                    .default = Corrected.Date.Analytical.FT.Uncertainty.2s)) %>%
+  mutate(Corrected.Date.Analytical.FT.Uncertainty.1s = case_when(Fragment == "Yes" ~ NA,
+                                    .default = Corrected.Date.Analytical.FT.Uncertainty.1s)) %>%
+  mutate(Corrected_Date.No.FT.Inheritance = case_when(Fragment == "Yes" ~ NA,
+                                    .default = Corrected_Date.No.FT.Inheritance)) %>%
+  mutate(Corrected.Date.No.FT.Inheritance.Analytical.Uncertainty.1s = case_when(Fragment == "Yes" ~ NA,
+                                    .default = Corrected.Date.No.FT.Inheritance.Analytical.Uncertainty.1s)) %>%
+  mutate(Corrected.Date.No.FT.Inheritance.Analytical.Uncertainty.2s = case_when(Fragment == "Yes" ~ NA,
+                                    .default = Corrected.Date.No.FT.Inheritance.Analytical.Uncertainty.2s))
 
 he_units <- data.frame("Run" = NA, "Sample" = NA, "Grain" = NA,
                                 "Length.1" = "µm", "Width.1"= "µm",
@@ -340,7 +359,7 @@ he_units <- data.frame("Run" = NA, "Sample" = NA, "Grain" = NA,
 "Corrected.Date" = "Ma",
 "Corrected.Date.Analytical.Uncertainty.1s" = "Ma", "Corrected.Date.Analytical.Uncertainty.2s" = "Ma",
 "Corrected.Date.Analytical.FT.Uncertainty.1s" = "Ma", "Corrected.Date.Analytical.FT.Uncertainty.2s" = "Ma",
-"Corrected_Date.No.FT.Inheritance" = "Ma", "Corrected.Date.No.FT.Inheritance.Analytical.Uncertainty.1s" = "Ma", "Corrected.Date.No.FT.Inheritance.Analytical.Uncertainty.2s" = "Ma")
+"Corrected_Date.No.FT.Inheritance" = "Ma", "Corrected.Date.No.FT.Inheritance.Analytical.Uncertainty.1s" = "Ma", "Corrected.Date.No.FT.Inheritance.Analytical.Uncertainty.2s" = "Ma", "Rejection.Reason" = NA)
 
 he_footer <- data.frame("Run" = c("a - This table follows the recommendations and approach in Flowers et al. (2022).", "b - U-Pb LA-ICP-MS data collection session.", "c - Zircon grain analyzed.", "d - Length is measured parallel to the c-axis and includes pyramidal terminations. It is measured twice on two perpendicular sides.",
 "e - Width 1 is measured perpendicular to the c-axis. Width 2 is measured perpendicular to both the c-axis and width 1.",
@@ -377,10 +396,9 @@ he_footer <- data.frame("Run" = c("a - This table follows the recommendations an
 "aj - Total analytical uncertainty (TAU) on the corrected (U-Th)/He date reported at 1σ. Includes the propagated TAU on the U, Th, Sm and He measurements. Uncertainty propagation done using HeCalc (Martin et al., 2023).",
 "ak - Total combined uncertainty on the corrected (U-Th)/He date reported at 1σ. Includes the propagated total analytical uncertainties (TAU) on the U, Th, Sm and He measurements and uncertainty on individual FT values. Uncertainty propagation done using HeCalc (Martin et al., 2023).", 
 "al - Corrected (U-Th)/He date with FT correction applied only to He production estimated to have occurred post-deposition. See Supplementary Text for details.",
-"am - Total analytical uncertainty (TAU) on the corrected (U-Th)/He date with modifed FT correction reported at 1σ. Includes the propagated TAU on the U, Th, Sm and He measurements, and uncertainty on depositional age. See Supplementary Text for details.", NA, "Rejected From Further Analysis:",
-"*No measurable U, n = 1",
-"** FT < 0.55, n = 1",
-"*** ZHe date > U-Pb date, n = 3", NA,
+"am - Total analytical uncertainty (TAU) on the corrected (U-Th)/He date with modifed FT correction reported at 1σ. Includes the propagated TAU on the U, Th, Sm and He measurements, and uncertainty on depositional age. See Supplementary Text for details.",
+"an - Reason analysis rejected from interpreted dataset if applicable.",
+NA,
 "References cited in footnotes:",
 "Cooperdock, E.H.G., Ketcham, R.A., and Stockli, D.F., 2019, Resolving the effects of 2D versus 3D grain measurements on (U-Th)/ He age data and reproducibility: Geochronology, 1, p. 17-41, doi: 10.5194/gchron-1-17-2019.",
 "Flowers, R.M., Zeitler, P.K., Danišík, M., Reiners, P.W., Gautheron, C., Ketcham, R.A., Metcalf, J.R., Stockli, D.F., Enkelmann, E., and Brown, R.W., 2022, (U-Th)/He chronology: Part 1. Data, uncertainty, and reporting: Geological Society of America Bulletin special volume on the Reporting and Interpretation of Geochronologic data, https://doi.org/10.1130/B36266.1",
@@ -401,13 +419,13 @@ colnames(he_print) <- c("Runab", "Sample", "Grainc", "Length 1d", "Width 1e",
 "± 1σ TAUaj", "Corrected.Date.Analytical.Uncertainty.2s",
 "± 1σ TAU + GEMak", "Corrected.Date.Analytical.FT.Uncertainty.2s",
 "Corrected Date No Inherited FTal",
-"± 1σ TAUam", "Corrected.Date.No.FT.Inheritance.Analytical.Uncertainty.2s"
+"± 1σ TAUam", "Corrected.Date.No.FT.Inheritance.Analytical.Uncertainty.2s", "Reason for Rejectionan"
 )
 ```
 ```{r write and save tables as xlsx}
 # human reader file add sheets ---
 write.xlsx(print_upb, "/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/data_tables_S1.xlsx", sheetName = "Table S1. U-Pb Data")
-write.xlsx(he_print, "/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/data_tables_S4_2026_01_19.xlsx", sheetName = "Sheet1")
+write.xlsx(he_print, "/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/data_tables_S4_2026_01_21.xlsx", sheetName = "Sheet1")
 
 # repository file add sheets ----
 write.xlsx(repository_upb, "/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/repository_data_tables.xlsx",

@@ -14,7 +14,8 @@ library(stringr) # for easier character data handling
 library(tibble) # for easier datatable rearranging
 library(ggplot2) # plotting
 library(viridis) # viridis color maps
-library(forcats)
+library(forcats) # data handling
+library(ggnewscale) # adding color scales to ggplot
 ```
 
 ## R Markdown
@@ -54,17 +55,20 @@ all_data <- full_join(upb_data, he_data, by = c("Run", "Sample", "Grain")) %>%
                                 .default = Corrected.Date)) %>%
   mutate(ZHe.Report.1s = case_when(Fragment == "Yes" ~ Uncorrected.Date.1s,
                                 .default = Corrected.Date.Analytical.FT.Uncertainty.1s)) %>%
-  mutate(FT.Applied = case_when(Fragment == "Yes" ~ "No",
-                                .default = "Yes"))
+  mutate(FT.Applied = case_when(Fragment == "Yes" ~ "None",
+                                .default = "Conventional"))
 ```
 ```{r calculate max alpha dose and uncertainty}
-L238 <- 0.00000000015512 #decay constants in yr
+# decay constants in yr
+L238 <- 0.00000000015512 
 L235 <- 0.00000000098485
 L232 <- 0.0000000000499
 L147 <- (log(2)/(1.06*10^(11)))
+# avogadro's number
 Av <- 6.022*10^(23) # avogadro's number
 
 all_data <- all_data %>%
+  # convert concentrations to atoms (and uncertainty)
   mutate(U238.atoms.g = (0.9928*U.ppm*10^(-6)/238)*Av) %>%
   mutate(U238.a.g.u = (0.9928*U.ppm.1s*10^(-6)/238)*Av) %>%
   mutate(U235.atoms.g = (0.0072*U.ppm*10^(-6)/235)*Av) %>%
@@ -73,10 +77,12 @@ all_data <- all_data %>%
   mutate(Th.a.g.u = (Th.ppm.1s*10^(-6)/232)*Av) %>%
   mutate(Sm.atoms.g = (Sm.ppm*10^(-6)/147)*Av) %>%
   mutate(Sm.a.g.u = (Sm.ppm.1s*10^(-6)/232)*Av) %>%
+  # calculate alpha dose
   mutate(Max.Alpha.Dose = 8*U238.atoms.g*(exp(L238*Pb207.Pb206_Date*10^6)-1) + 
   7*U235.atoms.g*(exp(L235*Pb207.Pb206_Date*10^6)-1) + 
   6*Th.atoms.g*(exp(L232*Pb207.Pb206_Date*10^6)-1) +
-    Sm.atoms.g*(exp(L147*Pb207.Pb206_Date*10^6)-1)) %>% # keep editing here
+    Sm.atoms.g*(exp(L147*Pb207.Pb206_Date*10^6)-1)) %>% 
+  # calculate propagated uncertainty on alpha dose
   mutate(A.u = 8*U238.atoms.g*(exp(L238*Pb207.Pb206_Date*10^6)-1)*
            sqrt((U238.a.g.u/U238.atoms.g)^2 + 
                   (L238*Pb207.Pb206_Date.2SE/2)^2)) %>%
@@ -87,10 +93,12 @@ all_data <- all_data %>%
   mutate(D.u = case_when(Sm.ppm == 0 ~ 0,
                          .default = 6*Sm.atoms.g*(exp(L147*Pb207.Pb206_Date*10^6)-1)*
            sqrt((Sm.a.g.u/Sm.atoms.g)^2 + (L147*Pb207.Pb206_Date.2SE/2)^2))) %>%
+  # uncertainty
   mutate(Max.Alpha.Dose.1s = sqrt(A.u^2 + B.u^2 + C.u^2 + D.u^2)) %>%
+  # delete components of uncertainty calculation
   select(!c(A.u, B.u, C.u, D.u))
 ```
-```{r Figure S1. combined density plots, echo = F}
+```{r Figure 2. combined density plots, echo = F}
 binwidth = 30
 # define density functions
 # new data
@@ -119,8 +127,6 @@ p.density.c <-
                alpha = .2, fill = "#997700") + # Shawinigan
   annotate("rect", xmin = 1200, xmax = 1250, ymin = -Inf, ymax = Inf,
                alpha = .2, fill = "#997700") + # Elezevirian
-  annotate("rect", xmin = 1300, xmax = 1360, ymin = -Inf, ymax = Inf,
-               alpha = .3, fill = "#332288") + #Pre-Elzevierian
   annotate("rect", xmin = 1340, xmax = 1370, ymin = -Inf, ymax = Inf,
                alpha = .3, fill = "#332288") + # SGGRP south
   annotate("rect", xmin = 1380, xmax = 1520, ymin = -Inf, ymax = Inf,
@@ -129,13 +135,11 @@ p.density.c <-
                alpha = .3, fill = "#225555") + # Mazatzal, from west
   annotate("rect", xmin = 1820, xmax = 1880, ymin = -Inf, ymax = Inf,
                alpha = .3, fill = "#225555") + # Penokean from S and E
-  # annotate("rect", xmin = 1800, xmax = 2000, ymin = -Inf, ymax = Inf,
-  #              alpha = .1, fill = "green") + # Trans Hudson Orogen from west or recycled
   annotate("rect", xmin = 2700, xmax = 3000, ymin = -Inf, ymax = Inf,
                alpha = .3, fill = "#225555") + # Superior Province from N
-  geom_density(data = malone_data_comp, aes(x = X206Pb..207Pb..age), bw = binwidth, fill = "gray", alpha = 0.6, adjust = 2) +   # kernal density
-  # geom_rug(data = all_data, aes(x = Pb207.Pb206_Date), alpha = 0.4, position = "jitter", outside = TRUE, color = "red") +
-  # geom_rug(data = malone_data_comp, aes(x = X206Pb..207Pb..age),alpha = 0.4, sides = "b", outside = FALSE, color = "blue") +
+  geom_density(data = malone_data_comp, aes(x = X206Pb..207Pb..age), bw = binwidth, fill = "transparent", linetype = "dashed", alpha = 0.6, adjust = 2) +   # kernal density
+  geom_rug(data = all_data, aes(x = Pb207.Pb206_Date), alpha = 0.4, outside = FALSE, color = "black") +
+  geom_rug(data = malone_data_comp, aes(x = X206Pb..207Pb..age), alpha = 0.4, sides = "b", outside = TRUE, color = "blue") +
    geom_density(data = all_data, aes(x = Pb207.Pb206_Date), bw = binwidth, fill = "black", alpha = 0.6, adjust = 2) +
   coord_cartesian(clip = "off") +
   xlim(500, 3000) +
@@ -143,7 +147,7 @@ p.density.c <-
   ylab("Density") +
   annotate("text", x = 2000, y = 0.003, label = "U/Pb This Study", colour =  "black", hjust = 0) +
   annotate("text", x = 2000, y = 0.0028, label = paste("n =", nrow(all_data)), colour =  "black", hjust = 0) +
-  annotate("text",x = 2000, y = 0.0022, label = paste("Kernel Binwidth =", round(upb_density$bw,2)), colour = "black", hjust = 0) +
+  annotate("text",x = 2000, y = 0.0022, label = paste("Kernel Binwidth =", round(upb_density$bw,2), "Myr"), colour = "black", hjust = 0) +
   annotate("text", x=1395-200, y = 0.0021, label = paste(signif(peak1[1], 3)), colour = "black") +
   annotate("text", x  = 1852+200, y = 0.0006, label = paste(signif(peak2[1], 3)), colour = "black") +
   annotate("text", x = 2700, y = 0.0002, label = paste(signif(peak3[1], 3)), colour = "black") +
@@ -162,7 +166,7 @@ p.density.c <-
     axis.text = element_text(size = 9),
     axis.title = element_text(size = 11))
 p.density.c
-ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R.Fig.S1B.pdf", plot = p.density.c, width = 6.5, height = 3)
+ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R.Fig.1_UPb.pdf", plot = p.density.c, width = 6.5, height = 2)
 ```
 ```{r U-Pb K-S test}
 ks <- ks.test(x = all_data$Pb207.Pb206_Date, y = malone_data_comp$X206Pb..207Pb..age, alternative = "two.sided")
@@ -235,11 +239,12 @@ upb_cdf <- upb_cdf_data %>%
   #       legend.title = element_text(size = 11))
 upb_cdf
 
-ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R.Fig.S1A.pdf", plot = upb_cdf, width = 6.5, height = 3)
+#ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R.Fig.S1A.pdf", plot = upb_cdf, width = 6.5, height = 3)
 ```
 ```{r ZHe for plotting, echo = FALSE}
 ZHe_plot_data <- all_data %>%
   drop_na(He4.fmol) %>%
+  filter(is.na(Rejection.Reason)) %>%
   mutate(Max.Alpha.Dose = Max.Alpha.Dose/(10^(16))) %>%
   mutate(Max.Alpha.Dose.1s = Max.Alpha.Dose.1s/(10^(16))) %>%
   mutate(Age_Group = case_when(Pb207.Pb206_Date < 1600 ~ "1360 Ma",
@@ -248,14 +253,29 @@ ZHe_plot_data <- all_data %>%
   mutate(Age_Group = factor(Age_Group, levels = c("1360 Ma", "1860 Ma", "2640 Ma"))) %>%
   mutate(Opacity = case_when(ZHe.Report < 100 ~ "transparent",
                              .default = "opaque")) %>%
-  mutate(Rejection = case_when(Fragment == "No" & Combined.FT < 0.5 ~ "FT Too Low",
-                               U.ng == 0 ~ "No Uranium",
-                               ZHe.Report > Pb207.Pb206_Date ~ "ZHe date too old",
-                               .default = NA))
-summary(ZHe_plot_data$Age_Group)
-summary(as.factor(ZHe_plot_data$Rejection))
-too_old <- ZHe_plot_data %>%
-  filter(Rejection == "ZHe date too old")
+  mutate(FT_date_plot = case_when(is.na(Corrected_Date.No.FT.Inheritance) == F ~ Corrected_Date.No.FT.Inheritance,
+                                  .default = ZHe.Report)) %>%
+  mutate(FT_date_plot.1s = case_when(is.na(Corrected_Date.No.FT.Inheritance) == F ~ Corrected.Date.No.FT.Inheritance.Analytical.Uncertainty.1s,
+                                  .default = ZHe.Report.1s)) %>%
+  mutate(FT.Applied.Extra = case_when(is.na(Corrected_Date.No.FT.Inheritance) == F  & Fragment == "No" ~ "Since Deposition Only",
+                                .default = FT.Applied)) %>%
+  mutate(FT.Applied.Extra = factor(FT.Applied.Extra, levels = c("None", "Conventional", "Since Deposition Only"))) %>%
+  mutate(FT.Applied = factor(FT.Applied, levels = c("None", "Conventional")))
+age_n <- ZHe_plot_data %>% # count number in each age group irrespective of FT applied
+  count(Age_Group) %>%
+  rename("age_n_all" = "n")
+age_n_ft <- ZHe_plot_data %>% # count number in each age group only grains with FT
+  filter(FT.Applied != "None") %>%
+  count(Age_Group) %>%
+  rename("age_n_ft" = "n")
+FT.Applied_n <- ZHe_plot_data %>% # count number in each group of type of FT applied
+  count(FT.Applied.Extra) %>%
+  rename("n_ft_type" = "n")
+
+ZHe_plot_data <- ZHe_plot_data %>%
+  full_join(age_n, by = "Age_Group") %>%
+  full_join(age_n_ft, by = "Age_Group") %>%
+  full_join(FT.Applied_n, by = "FT.Applied.Extra")
 
 color_scale <- "D"
 color_breaks <- c(1, 10, 100, 1000)
@@ -264,17 +284,17 @@ color_trans <- "log"
 ```
 ```{r ZHe vs. eU plot, echo = FALSE}
 ZHe_eU <- ZHe_plot_data %>%
-  is.na(Rejection) %>%
   ggplot(aes(x = eU, y = ZHe.Report, xmin = eU - eU.1s, xmax = eU + eU.1s, ymin = ZHe.Report - ZHe.Report.1s, ymax = ZHe.Report + ZHe.Report.1s, shape = FT.Applied, colour =  Max.Alpha.Dose, alpha = Opacity)) +
   geom_hline(yintercept = 992, linewidth = 0.5, color = "black") +
-  geom_errorbar(aes(width = 0)) +
-  geom_errorbarh(aes(height = 0)) +
+  geom_errorbar(lineend = "square", orientation = "x") +
+  geom_errorbar(lineend = "square", orientation = "y") +
   geom_point(size = 2) +
   #scale_color_viridis(option = "C", transform = "log", limits = c(10, 2000), breaks = c(10, 100, 1000), name = "eU (ppm)") +
   #scale_color_viridis(trans = "log", limits = c(5, 780), name = "Max Alpha Dose (a/g x 10^16)") +
   scale_color_viridis(trans = color_trans, option = color_scale, limits = color_limits, breaks = color_breaks, name = "Max Alpha\nDose\n(x1016 a/g)") +
    #scale_color_viridis(option = color_scale, limits = c(0, 800), breaks = seq(0, 800, 100)) +
-  scale_shape_manual(values = c("No" = 15, "Yes" = 16), name = "FT Applied") +
+  geom_text(aes(x = 2000, y = 1600, label = paste("n = ", age_n_all)), colour = "black") +
+  scale_shape_manual(values = c("None" = 15, "Conventional" = 16), name = "FT Applied") +
   scale_alpha_manual(values = c("transparent" = 0.4, "opaque" = 1), guide = "none") +
   scale_x_continuous(name = "eU\n(ppm)", limits=c(0, 2500), breaks = seq(0, 2500, 500)) +
   scale_y_continuous(name = "ZHe Date (Ma)", limits=c(0, 1800), breaks = seq(0, 1800, 200)) + 
@@ -292,22 +312,22 @@ ZHe_eU <- ZHe_plot_data %>%
   facet_wrap(vars(Age_Group), nrow = 3)
 
 ZHe_eU
-ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R.Fig.S2eU.pdf", plot = ZHe_eU, width = 3.5, height = 5.5)
+ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Fig.S2eU_2026_01_21.pdf", plot = ZHe_eU, width = 3.75, height = 5.5)
 ```
 ```{r ZHe vs. alpha plot, echo = FALSE}
 ZHe_alpha <- ZHe_plot_data %>%
-  is.na(Rejection) %>%
   ggplot(aes(x = Max.Alpha.Dose, y = ZHe.Report, xmin = Max.Alpha.Dose - Max.Alpha.Dose.1s, xmax = Max.Alpha.Dose + Max.Alpha.Dose.1s, ymin = ZHe.Report - ZHe.Report.1s, ymax = ZHe.Report + ZHe.Report.1s, shape = FT.Applied, colour =  Max.Alpha.Dose, alpha = Opacity)) +
   geom_hline(yintercept = 992, linewidth = 0.5, color = "black") +
   geom_vline(xintercept = 100, linewidth = 0.5, color = "black", linetype = "dashed") +
-  geom_errorbar(aes(width = 0)) +
-  geom_errorbarh(aes(height = 0)) +
+  geom_errorbar(lineend = "square", orientation = "x") +
+  geom_errorbar(lineend = "square", orientation = "y") +
   geom_point(size = 2) +
   #scale_color_viridis(option = "C", transform = "log", limits = c(10, 2000), breaks = c(10, 100, 1000), name = "eU (ppm)") +
   #scale_color_viridis(trans = "log", limits = c(5, 780), name = "Max Alpha Dose (a/g x 10^16)") +
   scale_color_viridis(trans = color_trans, option = color_scale, limits = color_limits, breaks = color_breaks, name = "Max Alpha\nDose\n(x1016 a/g)") +
+  geom_text(aes(x = 800, y = 1600, label = paste("n = ", age_n_all)), colour = "black") +
    #scale_color_viridis(option = color_scale, limits = c(0, 800), breaks = seq(0, 800, 100)) +
-  scale_shape_manual(values = c("No" = 15, "Yes" = 16), name = "FT Applied") +
+  scale_shape_manual(values = c("None" = 15, "Conventional" = 16), name = "FT Applied") +
   scale_alpha_manual(values = c("transparent" = 0.4, "opaque" = 1), guide = "none") +
   scale_x_continuous(name = "Max Alpha Dose\n(x1016 a/g)", limits=c(0, 1000), breaks = seq(0, 1000, 200)) +
   scale_y_continuous(name = "ZHe Date (Ma)", limits=c(0, 1800), breaks = seq(0, 1800, 200)) + 
@@ -325,26 +345,23 @@ ZHe_alpha <- ZHe_plot_data %>%
   facet_wrap(vars(Age_Group), nrow = 3)
 
 ZHe_alpha
-ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R.Fig.S2alpha.pdf", plot = ZHe_alpha, width = 3.5, height = 5.5)
+ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Fig.S2alpha_2026_01_21.pdf", plot = ZHe_alpha, width = 3.75, height = 5.5)
 ```
 ```{r ZHe vs. RFT, echo = FALSE}
-ZHe_plot_data_RFT <- ZHe_plot_data %>%
-  is.na(Rejection) %>%
-  filter(FT.Applied == "Yes")
-summary(ZHe_plot_data_RFT$Age_Group)
-
-ZHe_RFT <- ZHe_plot_data_RFT %>%
+ZHe_RFT <- ZHe_plot_data %>%
+  filter(FT.Applied == "Conventional") %>%
   ggplot(aes(x = RFT, y = ZHe.Report, xmin = RFT - RFT.1s, xmax = RFT + RFT.1s, ymin = ZHe.Report - ZHe.Report.1s, ymax = ZHe.Report + ZHe.Report.1s, shape = FT.Applied, colour =  Max.Alpha.Dose, alpha = Opacity)) +
   geom_hline(yintercept = 992, linewidth = 0.5, color = "black") +
-  geom_errorbar(aes(width = 0)) +
-  geom_errorbarh(aes(height = 0)) +
+  geom_errorbar(lineend = "square", orientation = "x") +
+  geom_errorbar(lineend = "square", orientation = "y") +
   geom_point(size = 2) +
   #scale_color_viridis(option = "C", transform = "log", limits = c(10, 2000), breaks = c(10, 100, 1000), name = "eU (ppm)") +
   scale_color_viridis(trans = color_trans, option = color_scale, limits = color_limits, breaks = color_breaks, name = "Max Alpha\nDose\n(x1016 a/g)") +
   #scale_color_viridis(trans = "log", limits = c(5, 780), name = "Max Alpha Dose (a/g x 10^16)") +
   #scale_color_viridis(option = color_scale, limits = color_limits, breaks = color_breaks) +
    #scale_color_viridis(option = color_scale, limits = c(0, 800), breaks = seq(0, 800, 100)) +
-  scale_shape_manual(values = c("No" = 15, "Yes" = 16), name = "FT Applied") +
+  geom_text(aes(x = 175, y = 1600, label = paste("n = ", age_n_ft)), colour = "black") +
+  scale_shape_manual(values = c("None" = 15, "Conventional" = 16), name = "FT Applied") +
   scale_alpha_manual(values = c("transparent" = 0.4, "opaque" = 1), guide = "none") +
   scale_x_continuous(name = "FT-Equivalent\nSpherical Radius (µm)", limits=c(0, 200), breaks = seq(0, 200, 25)) +
   scale_y_continuous(name = "ZHe Date (Ma)", limits=c(0, 1800), breaks = seq(0, 1800, 200)) + 
@@ -363,14 +380,13 @@ ZHe_RFT <- ZHe_plot_data_RFT %>%
 
 ZHe_RFT
 
-ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R.Fig.S2RFT.pdf", plot = ZHe_RFT, width = 3.5, height = 5.5)
+ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Fig.S2RFT_2026_01_21.pdf", plot = ZHe_RFT, width = 3.75, height = 5.5)
 ```
 
 ```{r ZHe vs. UPb plot Main Paper, echo = FALSE}
 td <- (992.51+0.64 - (((992.51 + 0.64) - (985.5- 35.8))/2)) *10^6 # maximum depositonal age in yr
 td.unc <- (((992.51 + 0.64) - (985.5- 35.8))/2) *10^6 # unvertainty on depositional age in yr
 ZHe_UPb <- ZHe_plot_data %>%
-  is.na(Rejection) %>%
   ggplot(aes(x = Pb207.Pb206_Date, y = ZHe.Report, xmin = Pb207.Pb206_Date - Pb207.Pb206_Date.2SE, xmax = Pb207.Pb206_Date + Pb207.Pb206_Date.2SE, ymin = ZHe.Report - ZHe.Report.1s, ymax = ZHe.Report + ZHe.Report.1s, shape = FT.Applied, colour =  Max.Alpha.Dose, alpha = Opacity)) +
   annotate("rect", xmin = 980, xmax = 1010, ymin = -Inf, ymax = Inf,
                alpha = .3, fill = "#997700") + # Rigolet
@@ -397,7 +413,7 @@ ZHe_UPb <- ZHe_plot_data %>%
   annotate("rect", xmin = 2700, xmax = 3000, ymin = -Inf, ymax = Inf,
                alpha = .3, fill = "#225555") + # Superior Province from N
   # y axis
-    annotate("rect", ymin = 980, ymax = 1010, xmin = -Inf, xmax = Inf,
+  annotate("rect", ymin = 980, ymax = 1010, xmin = -Inf, xmax = Inf,
                alpha = .3, fill = "#997700") + # Rigolet
   annotate("rect", ymin = 1020, ymax = 1090, xmin = -Inf, xmax = Inf,
                alpha = .3, fill = "#997700") + # Ottawan
@@ -434,17 +450,18 @@ ZHe_UPb <- ZHe_plot_data %>%
   # annotate("rect", xmin = 1350, xmax = 1500, ymin = -Inf, ymax = Inf,
   #              alpha = .1, fill = "pink") +
   geom_abline(slope = 1,  linewidth = 0.5, color = "black", linetype = "dashed") +
-  geom_errorbar(aes(width = 0), option = "x") +
-  geom_errorbar(aes(height = 0), option = "y") +
+  geom_errorbar(lineend = "square", orientation = "x") +
+  geom_errorbar(lineend = "square", orientation = "y") +
   geom_point(size = 2) +
   #scale_color_viridis(option = "C", transform = "log", limits = c(10, 2000), breaks = c(10, 100, 1000), name = "eU (ppm)") +
   #scale_color_viridis(trans = "log", limits = c(5, 780), name = "Max Alpha Dose (a/g x 10^16)") +
   scale_color_viridis(trans = "log", option = color_scale, limits = color_limits, breaks = color_breaks, name = "Max Alpha\nDose\n(x1016 a/g)") +
    #scale_color_viridis(option = color_scale, limits = c(0, 800), breaks = seq(0, 800, 100)) +
-  scale_shape_manual(values = c("No" = 15, "Yes" = 16), name = "FT Applied") +
+  scale_shape_manual(values = c("None" = 15, "Conventional" = 16), name = "FT Applied") +
   scale_alpha_manual(values = c("transparent" = 0.4, "opaque" = 1), guide = "none") +
   scale_x_continuous(name = "207Pb/206Pb Date (Ma)", limits=c(0, 3500), breaks = seq(0, 3000, 500)) +
   scale_y_continuous(name = "ZHe Date (Ma)", limits=c(0, 2400), breaks = seq(0, 2000, 200)) + 
+  geom_text(aes(x = 200, y = 2000, label = paste("n = ", nrow(ZHe_plot_data))), colour = "black") +
   theme(panel.background = element_rect(fill = "transparent", colour = "transparent", linewidth = 0.75),
         panel.border = element_rect(fill = NA, color = "black", linewidth = 0.75),
         axis.ticks = element_line(colour = "black", linewidth = 0.5),
@@ -458,7 +475,7 @@ ZHe_UPb <- ZHe_plot_data %>%
         legend.position = "none")
 
 ZHe_UPb
-ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R.Fig.3.pdf", plot = ZHe_UPb, width = 4, height = 4)
+ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Fig.3_2026_01_21.pdf", plot = ZHe_UPb, width = 4, height = 4)
 ```
 ```{r density plots for Fig 3, echo = F}
 upb.density.3 <- 
@@ -474,11 +491,9 @@ upb.density.3 <-
     axis.text = element_text(size = 9),
     axis.title = element_text(size = 11))
 upb.density.3
-ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R.Fig.3upb.pdf", plot = upb.density.3, width = 4, height = 2)
+#ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R.Fig.3upb.pdf", plot = upb.density.3, width = 4, height = 2)
 
-zhe.density.3 <- all_data %>%
-  is.na(Rejection) %>%
-  drop_na(ZHe.Report) %>%
+zhe.density.3 <- ZHe_plot_data %>%
   ggplot() +
    geom_density(aes(x = ZHe.Report), bw = binwidth, fill = "black", alpha = 0.6, adjust = 2) +
   coord_cartesian(clip = "off") +
@@ -491,18 +506,12 @@ zhe.density.3 <- all_data %>%
     axis.text = element_text(size = 9),
     axis.title = element_text(size = 11))
 zhe.density.3
-ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R.Fig.3zhe.pdf", plot = zhe.density.3, width = 4, height = 2)
+ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Fig.3zhe.pdf", plot = zhe.density.3, width = 4, height = 2)
 ```
 
 ```{r ZHe vs. UPb plot Ft consideration, echo = FALSE}
 ZHe_UPb_FT <- ZHe_plot_data %>%
-  mutate(FT_date_plot = case_when(is.na(Corrected_Date.No.FT.Inheritance) == F ~ Corrected_Date.No.FT.Inheritance,
-                                  .default = ZHe.Report)) %>%
-  mutate(FT_date_plot.1s = case_when(is.na(Corrected_Date.No.FT.Inheritance) == F ~ Corrected.Date.No.FT.Inheritance.Analytical.Uncertainty.1s,
-                                  .default = ZHe.Report.1s)) %>%
-  mutate(FT.Applied = case_when(is.na(Corrected_Date.No.FT.Inheritance) == F ~ "Since Deposition Only",
-                                .default = FT.Applied)) %>%
-  ggplot(aes(x = Pb207.Pb206_Date, y = FT_date_plot, xmin = Pb207.Pb206_Date - Pb207.Pb206_Date.2SE, xmax = Pb207.Pb206_Date + Pb207.Pb206_Date.2SE, ymin = FT_date_plot - FT_date_plot.1s, ymax = FT_date_plot + FT_date_plot.1s, shape = FT.Applied, colour =  Max.Alpha.Dose, alpha = Opacity)) +
+  ggplot(aes(x = Pb207.Pb206_Date, y = FT_date_plot, xmin = Pb207.Pb206_Date - Pb207.Pb206_Date.2SE, xmax = Pb207.Pb206_Date + Pb207.Pb206_Date.2SE, ymin = FT_date_plot - FT_date_plot.1s, ymax = FT_date_plot + FT_date_plot.1s, shape = FT.Applied.Extra, colour =  Max.Alpha.Dose, alpha = Opacity)) +
   annotate("rect", xmin = 980, xmax = 1010, ymin = -Inf, ymax = Inf,
                alpha = .3, fill = "#997700") + # Rigolet
   annotate("rect", xmin = 1020, xmax = 1090, ymin = -Inf, ymax = Inf,
@@ -565,14 +574,14 @@ ZHe_UPb_FT <- ZHe_plot_data %>%
   # annotate("rect", xmin = 1350, xmax = 1500, ymin = -Inf, ymax = Inf,
   #              alpha = .1, fill = "pink") +
   geom_abline(slope = 1,  linewidth = 0.5, color = "black", linetype = "dashed") +
-  geom_errorbar(aes(width = 0)) +
-  geom_errorbarh(aes(height = 0)) +
+  geom_errorbar(lineend = "square", orientation = "x") +
+  geom_errorbar(lineend = "square", orientation = "y") +
   geom_point(size = 2) +
   #scale_color_viridis(option = "C", transform = "log", limits = c(10, 2000), breaks = c(10, 100, 1000), name = "eU (ppm)") +
   #scale_color_viridis(trans = "log", limits = c(5, 780), name = "Max Alpha Dose (a/g x 10^16)") +
   scale_color_viridis(trans = "log", option = color_scale, limits = color_limits, breaks = color_breaks) +
    #scale_color_viridis(option = color_scale, limits = c(0, 800), breaks = seq(0, 800, 100)) +
-  scale_shape_manual(values = c("No" = 15, "Yes" = 16, "Since Deposition Only" = 17), name = "FT Applied") +
+  scale_shape_manual(values = c("None" = 15, "Conventional" = 16, "Since Deposition Only" = 17), name = "FT Applied") +
   scale_alpha_manual(values = c("transparent" = 0.4, "opaque" = 1), guide = "none") +
   scale_x_continuous(name = "207Pb/206Pb Date (Ma)", limits=c(0, 3500), breaks = seq(0, 3000, 500)) +
   scale_y_continuous(name = "ZHe Date (Ma)", limits=c(0, 2400), breaks = seq(0, 2000, 200)) + 
@@ -589,19 +598,12 @@ ZHe_UPb_FT <- ZHe_plot_data %>%
         legend.position = "none")
 
 ZHe_UPb_FT
-ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R.Fig.S3.pdf", plot = ZHe_UPb_FT, width = 4, height = 4)
+ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Fig.S3_2026_01_21.pdf", plot = ZHe_UPb_FT, width = 4, height = 4)
 ```
 ```{r ZHe_FT vs. ZHe plot consideration, echo = FALSE}
 ZHe_FT_comp <- ZHe_plot_data %>%
-  is.na(Rejection) %>%
-  mutate(FT_date_plot = case_when(is.na(Corrected_Date.No.FT.Inheritance) == F ~ Corrected_Date.No.FT.Inheritance,
-                                  .default = ZHe.Report)) %>%
-  mutate(FT_date_plot.1s = case_when(is.na(Corrected_Date.No.FT.Inheritance) == F ~ Corrected.Date.No.FT.Inheritance.Analytical.Uncertainty.1s,
-                                  .default = ZHe.Report.1s)) %>%
-  mutate(FT.Applied = case_when(is.na(Corrected_Date.No.FT.Inheritance) == F ~ "Since Deposition Only",
-                                .default = FT.Applied)) %>%
-  drop_na(Corrected_Date.No.FT.Inheritance) %>%
-  ggplot(aes(x = ZHe.Report, y = FT_date_plot, xmin = ZHe.Report - ZHe.Report.1s, xmax = ZHe.Report + ZHe.Report.1s, ymin = FT_date_plot - FT_date_plot.1s, ymax = FT_date_plot + FT_date_plot.1s, shape = FT.Applied, colour =  Max.Alpha.Dose, alpha = Opacity)) +
+  filter(FT.Applied.Extra == "Since Deposition Only") %>%
+  ggplot(aes(x = ZHe.Report, y = FT_date_plot, xmin = ZHe.Report - ZHe.Report.1s, xmax = ZHe.Report + ZHe.Report.1s, ymin = FT_date_plot - FT_date_plot.1s, ymax = FT_date_plot + FT_date_plot.1s, shape = FT.Applied.Extra, colour =  Max.Alpha.Dose, alpha = Opacity)) +
   annotate("rect", xmin = 980, xmax = 1010, ymin = -Inf, ymax = Inf,
                alpha = .3, fill = "#997700") + # Rigolet
   annotate("rect", xmin = 1020, xmax = 1090, ymin = -Inf, ymax = Inf,
@@ -627,7 +629,7 @@ ZHe_FT_comp <- ZHe_plot_data %>%
   annotate("rect", xmin = 2700, xmax = 3000, ymin = -Inf, ymax = Inf,
                alpha = .3, fill = "#225555") + # Superior Province from N
   # y axis
-    annotate("rect", ymin = 980, ymax = 1010, xmin = -Inf, xmax = Inf,
+  annotate("rect", ymin = 980, ymax = 1010, xmin = -Inf, xmax = Inf,
                alpha = .3, fill = "#997700") + # Rigolet
   annotate("rect", ymin = 1020, ymax = 1090, xmin = -Inf, xmax = Inf,
                alpha = .3, fill = "#997700") + # Ottawan
@@ -664,14 +666,15 @@ ZHe_FT_comp <- ZHe_plot_data %>%
   # annotate("rect", xmin = 1350, xmax = 1500, ymin = -Inf, ymax = Inf,
   #              alpha = .1, fill = "pink") +
   geom_abline(slope = 1,  linewidth = 0.5, color = "black", linetype = "dashed") +
-  geom_errorbar(aes(width = 0)) +
-  geom_errorbarh(aes(height = 0)) +
+  geom_errorbar(lineend = "square", orientation = "x") +
+  geom_errorbar(lineend = "square", orientation = "y") +
   geom_point(size = 2) +
   #scale_color_viridis(option = "C", transform = "log", limits = c(10, 2000), breaks = c(10, 100, 1000), name = "eU (ppm)") +
   #scale_color_viridis(trans = "log", limits = c(5, 780), name = "Max Alpha Dose (a/g x 10^16)") +
   scale_color_viridis(trans = "log", option = color_scale, limits = color_limits, breaks = color_breaks) +
+  geom_text(aes(x = 1000, y = 1600, label = paste("n = ", n_ft_type)), color = "black") +
    #scale_color_viridis(option = color_scale, limits = c(0, 800), breaks = seq(0, 800, 100)) +
-  scale_shape_manual(values = c("No" = 15, "Yes" = 16, "Since Deposition Only" = 17), name = "FT Applied") +
+  scale_shape_manual(values = c("None" = 15, "Conventional" = 16, "Since Deposition Only" = 17), name = "FT Applied") +
   scale_alpha_manual(values = c("transparent" = 0.4, "opaque" = 1), guide = "none") +
   scale_x_continuous(name = "ZHe Date, Normal FT Correction (Ma)", limits=c(900, 1700), breaks = seq(900, 1700, 200)) +
   scale_y_continuous(name = "ZHe Date, FT Correction Since Deposition Only (Ma)", limits=c(900, 1700), breaks = seq(900, 1700, 200)) + 
@@ -688,20 +691,29 @@ ZHe_FT_comp <- ZHe_plot_data %>%
         legend.position = "none")
 
 ZHe_FT_comp
-ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R.Fig.S3_inset.pdf", plot = ZHe_FT_comp, width = 2.5, height = 2.5)
+ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Fig.S3_inset_2026_01_21.pdf", plot = ZHe_FT_comp, width = 2.47, height = 1.6)
+```
+```{r ZHe density plot supplement}
+zhe.density.ft <- ZHe_plot_data %>%
+  ggplot() +
+   geom_density(aes(x = FT_date_plot), bw = binwidth, fill = "black", alpha = 0.6, adjust = 2) +
+  coord_cartesian(clip = "off") +
+  xlim(0, 2000) +
+  xlab("ZHe Date (Ma)") +
+  ylab("Density") +
+  theme_bw() +
+  theme(
+    plot.title = element_text(size=12),
+    axis.text = element_text(size = 9),
+    axis.title = element_text(size = 11))
+zhe.density.ft
+ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Fig.S3zhe.pdf", plot = zhe.density.ft, width = 4, height = 2)
 ```
 ```{r ZHe_FT vs. ZHe plot consideration zoomed in, echo = FALSE}
 ZHe_FT_comp_zoom <- ZHe_plot_data %>%
-  is.na(Rejection) %>%
-  mutate(FT_date_plot = case_when(is.na(Corrected_Date.No.FT.Inheritance) == F ~ Corrected_Date.No.FT.Inheritance,
-                                  .default = ZHe.Report)) %>%
-  mutate(FT_date_plot.1s = case_when(is.na(Corrected_Date.No.FT.Inheritance) == F ~ Corrected.Date.No.FT.Inheritance.Analytical.Uncertainty.1s,
-                                  .default = ZHe.Report.1s)) %>%
-  mutate(FT.Applied = case_when(is.na(Corrected_Date.No.FT.Inheritance) == F ~ "Since Deposition Only",
-                                .default = FT.Applied)) %>%
-  drop_na(Corrected_Date.No.FT.Inheritance) %>%
+  filter(FT.Applied.Extra == "Since Deposition Only") %>%
   filter(ZHe.Report < 1300) %>%
-  ggplot(aes(x = ZHe.Report, y = FT_date_plot, xmin = ZHe.Report - ZHe.Report.1s, xmax = ZHe.Report + ZHe.Report.1s, ymin = FT_date_plot - FT_date_plot.1s, ymax = FT_date_plot + FT_date_plot.1s, shape = FT.Applied, colour =  Max.Alpha.Dose, alpha = Opacity)) +
+  ggplot(aes(x = ZHe.Report, y = FT_date_plot, xmin = ZHe.Report - ZHe.Report.1s, xmax = ZHe.Report + ZHe.Report.1s, ymin = FT_date_plot - FT_date_plot.1s, ymax = FT_date_plot + FT_date_plot.1s, shape = FT.Applied.Extra, colour =  Max.Alpha.Dose, alpha = Opacity)) +
   annotate("rect", xmin = 980, xmax = 1010, ymin = -Inf, ymax = Inf,
                alpha = .3, fill = "#997700") + # Rigolet
   annotate("rect", xmin = 1020, xmax = 1090, ymin = -Inf, ymax = Inf,
@@ -715,7 +727,7 @@ ZHe_FT_comp_zoom <- ZHe_plot_data %>%
   annotate("rect", xmin = 1300, xmax = 1360, ymin = -Inf, ymax = Inf,
                alpha = .1, fill = "#332288") + #Pre-Elzevierian
   # y axis
-    annotate("rect", ymin = 980, ymax = 1010, xmin = -Inf, xmax = Inf,
+  annotate("rect", ymin = 980, ymax = 1010, xmin = -Inf, xmax = Inf,
                alpha = .3, fill = "#997700") + # Rigolet
   annotate("rect", ymin = 1020, ymax = 1090, xmin = -Inf, xmax = Inf,
                alpha = .3, fill = "#997700") + # Ottawan
@@ -740,8 +752,8 @@ ZHe_FT_comp_zoom <- ZHe_plot_data %>%
   # annotate("rect", xmin = 1350, xmax = 1500, ymin = -Inf, ymax = Inf,
   #              alpha = .1, fill = "pink") +
   geom_abline(slope = 1,  linewidth = 0.5, color = "black", linetype = "dashed") +
-  geom_errorbar(aes(width = 0)) +
-  geom_errorbarh(aes(height = 0)) +
+  geom_errorbar(lineend = "square", orientation = "x") +
+  geom_errorbar(lineend = "square", orientation = "y") +
   geom_point(size = 2) +
   #scale_color_viridis(option = "C", transform = "log", limits = c(10, 2000), breaks = c(10, 100, 1000), name = "eU (ppm)") +
   #scale_color_viridis(trans = "log", limits = c(5, 780), name = "Max Alpha Dose (a/g x 10^16)") +
@@ -750,7 +762,7 @@ ZHe_FT_comp_zoom <- ZHe_plot_data %>%
   scale_shape_manual(values = c("None" = 15, "Conventional" = 16, "Since Deposition Only" = 17), name = "FT Applied") +
   scale_alpha_manual(values = c("transparent" = 0.4, "opaque" = 1), guide = "none") +
   scale_x_continuous(name = "ZHe Date, Conventional FT Correction (Ma)", limits=c(900, 1300), breaks = seq(900, 1300, 100)) +
-  scale_y_continuous(name = "ZHe Date FR Correction Since Deposition Only (Ma)", limits=c(900, 1300), breaks = seq(900, 1300, 100)) + 
+  scale_y_continuous(name = paste("ZHe Date FR Correction", "Since Deposition Only (Ma)", sep = "\n"), limits=c(900, 1300), breaks = seq(900, 1300, 100)) + 
   theme(panel.background = element_rect(fill = "transparent", colour = "transparent", linewidth = 0.75),
         panel.border = element_rect(fill = NA, color = "black", linewidth = 0.75),
         axis.ticks = element_line(colour = "black", linewidth = 0.5),
@@ -764,19 +776,12 @@ ZHe_FT_comp_zoom <- ZHe_plot_data %>%
         legend.position = "none")
 
 ZHe_FT_comp_zoom
-ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R.Fig.S3_zoom.pdf", plot = ZHe_FT_comp_zoom, width = 4, height = 4)
+ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Fig.S3_zoom_2026_01_21.pdf", plot = ZHe_FT_comp_zoom, width = 6.5, height = 3)
 ```
-```{r ZHe cumulative density function plot, echo = F}
+```{r ZHe cumulative density function plot, echo = FALSE}
 ZHe_cdf_data <- ZHe_plot_data %>%
-  is.na(Rejection) %>%
   filter(Fragment == "No") %>%
-  mutate(FT_date_plot = case_when(is.na(Corrected_Date.No.FT.Inheritance) == F ~ Corrected_Date.No.FT.Inheritance,
-                                  .default = ZHe.Report)) %>%
-  mutate(FT_date_plot.1s = case_when(is.na(Corrected_Date.No.FT.Inheritance) == F ~ Corrected.Date.No.FT.Inheritance.Analytical.Uncertainty.1s,
-                                  .default = ZHe.Report.1s)) %>%
-  mutate(FT.Applied = case_when(is.na(Corrected_Date.No.FT.Inheritance) == F ~ "Since Deposition Only",
-                                .default = FT.Applied)) %>%
-  select(c(Run, Sample, Grain, Fragment, Uncorrected.Date, ZHe.Report, FT_date_plot, FT.Applied))  %>%
+  select(c(Run, Sample, Grain, Fragment, Uncorrected.Date, ZHe.Report, FT_date_plot, FT.Applied.Extra))  %>%
   pivot_longer(cols = c(Uncorrected.Date, ZHe.Report, FT_date_plot), names_to = "Date_Type", values_to = "Date") %>%
   mutate("FT_cor" = case_when(Date_Type == "Uncorrected.Date" ~ "None",
                               Date_Type == "ZHe.Report" ~ "Conventional (Entire History)",
@@ -830,19 +835,360 @@ zhe_cdf <- ZHe_cdf_data %>%
   #       legend.title = element_text(size = 11))
 zhe_cdf
 
-ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R.Fig.S2C.pdf", plot = zhe_cdf, width = 6.5, height = 3)
+ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Fig.S2C_2026_01_21.pdf", plot = zhe_cdf, width = 6.5, height = 3)
 ```
 
-```{r load and extract model parameters, echo = F}
-### IMPORT FILES ----
-mod.type <- "Single"
-path.name <- "/Volumes/LaCie/Jacobsville_Models_2025/2026_01_09_open_neo" # less restrictive models (Table S4)
-# path.name <- "/Volumes/LaCie/Jacobsville_Models_2025/2025_11_12_neoproterozoic_restrictive_0.5" # more restrictive models (Table S5)
-files <- list.files(path = path.name, pattern = ".txt", all.files = TRUE)
-files <- files[str_starts(files, "._", negate = T)] # this is necesary to remove the "ghost files" present on the external drive files are being read in from
+```{r load model results summary tables, echo = FALSE}
+#Hft.con <- read.xlsx("/Volumes/LaCie/Jacobsville_Models_2025/HeFTy_Constraint_Summary.xlsx", startRow = 1, fillMergedCells = TRUE, check.names = TRUE)
 
+Hft.con <- drop_na(read.csv("/Volumes/LaCie/Jacobsville_Models_2025/HeFTy_Constraint_Summary.csv")) %>%
+  select(!c("X"))
 
-### GROUPED GRAIN MODELS ----
+Hft.con <- Hft.con %>%
+  mutate(Sample = sub('z', '', Sample)) %>%
+  mutate(Sample = sub('^\\D+(\\d)', '\\1', Sample)) %>%
+  mutate(Sample = case_when(Sample == "1_74" ~ "1_074",
+                            .default = Sample))
+
+Hft.tT <- drop_na(read.csv("/Volumes/LaCie/Jacobsville_Models_2025/HeFTy_Paths_all.csv")) %>%
+  select(!c("X"))
+
+Hft.tT <- Hft.tT %>%
+  mutate(Constraint = case_when(str_starts(Constraint, "Con") ~ paste("C", sub('.*Con', '', Constraint) , "Sub0", sep = ""),
+                                .default = Constraint)) %>%
+  mutate(Sample = sub('z', '', Sample)) %>%
+  mutate(Sample = sub('^\\D+(\\d)', '\\1', Sample)) %>%
+  mutate(Sample = case_when(Sample == "1_74" ~ "1_074",
+                            .default = Sample))
+```
+```{r merge model table with data, echo = FALSE}
+data.to.merge <- all_data %>%
+  select(c(Run, Grain, Pb207.Pb206_Date, Pb207.Pb206_Date.2SE, eU, eU.1s,
+           RSV, RSV.1s, RFT, RFT.1s, ZHe.Report, ZHe.Report.1s, FT.Applied, Rejection.Reason, Max.Alpha.Dose, Max.Alpha.Dose.1s)) %>%
+  mutate(Grain.ch = case_when(Grain < 10 ~ paste("00", Grain, sep = ""),
+                              between(Grain, 10, 99) ~ paste("0", Grain, sep = ""),
+                              .default = paste(Grain))) %>%
+  mutate(Sample = paste(Run, Grain.ch, sep = "_"))
+
+tT.data <- left_join(Hft.tT, data.to.merge, by = "Sample")
+```
+```{r Fig. 4 plot model setup, echo = FALSE}
+constraints <- Hft.con %>%
+  select(c(HeFTy.ID, Max.time..Ma., Min.time..Ma., Max.temp..C.,
+           Min.temp..C., Sample, Table.ID, Type)) %>%
+  mutate(Max.time..Ma. = case_when(Table.ID == "1a" ~ 1500,
+                                        Table.ID == "1a.1" ~ 1499.5,
+                                        Table.ID == "1a.2" ~ 1499,
+                                        .default = Max.time..Ma.)) %>%
+  group_by(Type, Sample) %>%
+  filter(Sample == "1_017")
+
+cons.df <- data.frame()
+for (i in 1:nrow(constraints)){
+    df <- data.frame("Time" = c(constraints$Max.time..Ma.[i], constraints$Max.time..Ma.[i], constraints$Min.time..Ma.[i], constraints$Min.time..Ma.[i]), 
+                     "Temp" = c(constraints$Max.temp..C.[i], constraints$Min.temp..C.[i], constraints$Min.temp..C.[i], constraints$Max.temp..C.[i]),
+                     "HeFTy.ID" = constraints$HeFTy.ID[i], 
+                     "Table.ID" = constraints$Table.ID[i],
+                     "Type" = constraints$Type[i])
+    cons.df <- rbind(cons.df, df) # combine data frames
+}
+
+cons.df <- cons.df %>%
+  mutate(Con.Type = case_when(Table.ID == "1a" ~ "Crystallization",
+                                            Table.ID == "2a" | Table.ID == "3a" | Table.ID == "3c" | Table.ID == "3c*" ~ "Surface",
+                                            Table.ID == "2b" | Table.ID == "3b" ~ "Sedimentary Burial",
+                                            .default = "Exploration Box"))
+
+col_vals <- c("Crystallization" = "#ed5f5a", "Surface" = "#5b81b0" , "Sedimentary Burial" = "#fbae35", "Exploration Box" = "black")
+line_vals <- c("Crystallization" = "solid", "Surface" = "solid", "Sedimentary Burial" = "dashed",
+              "Exploration Box" = "dotted")
+models <- cons.df %>%
+  ungroup() %>%
+  ggplot(aes(x = Time, y = Temp, group = HeFTy.ID, colour = as.factor(Con.Type), fill = after_scale(colour), linetype = as.factor(Con.Type), label = Table.ID)) +
+  scale_x_reverse(name = "Time (Ma)", expand = c(0,0), breaks = seq(0, 1500, 150)) +
+  scale_y_reverse(name = "Temperature (°C)", expand = c(0,0), breaks = seq(0, 1000, 200)) +
+  coord_cartesian(xlim = c(0, 1500), ylim = c(0, 1000)) +
+  geom_polygon(linewidth = 0.5, alpha = 0.3) +
+  annotate("rect", xmin = 485, xmax = 995, ymin = 0, ymax = 300, color = "black", fill = "transparent") +
+  #geom_label(aes(x = mean(Time), y = mean(Temp), group = HeFTy.ID, label = Table.ID), colour = "black") +
+  scale_color_manual(values = col_vals) +
+  scale_linetype_manual(values = line_vals) +
+  theme(panel.background = element_rect(fill = "transparent", color = "transparent", linewidth = 1),
+        panel.border = element_rect(fill = NA, color = "black", linewidth = 1),
+        axis.ticks = element_line(colour = "black", linewidth = 0.5),
+        axis.ticks.length = unit(-0.2,"cm"),
+        panel.grid.major = element_line(colour = "gray", linewidth = 0.25, linetype = 'dashed'),
+        axis.text = element_text(size = 7),
+        axis.title = element_text(size = 9),
+        plot.margin = grid::unit(c(0,0,0,0), "mm"),
+        legend.background = element_rect(fill = NA, colour = NA),
+        legend.key = element_blank(),
+        legend.text = element_text(size = 9),
+        legend.position = "bottom") +
+  facet_wrap(vars(as.factor(Model.Type)), ncol = 1)
+models
+
+ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Fig.4_2026_03_09.pdf", plot = models, width = 3.25, height = 7)
+```
+```{r min and max temp determinations, echo = FALSE}
+neo.envelopes <- tT.data %>%
+  ungroup() %>%
+  filter(str_detect(Constraint, "C5")) %>%
+  group_by(Sample, Type, Constraint) %>%
+  summarize(Type = unique(Type), Sample = unique(Sample), Constraint = unique(Constraint),
+            Max.Temp = max(Temp), Max.Time = Time[which(Temp == max(Temp))],
+            Min.Temp = min(Temp), Min.Time = Time[which(Temp == min(Temp))],
+            .groups = "keep")
+
+neo.points <- tT.data %>%
+  ungroup() %>%
+  filter(str_detect(Constraint, "C5")) %>%
+  group_by(Sample, Type) %>%
+  summarize(Type = unique(Type), Sample = unique(Sample),
+            Max.Temp = max(Temp), Max.Time = Time[which(Temp == max(Temp))],
+            Min.Temp = min(Temp), Min.Time = Time[which(Temp == min(Temp))],
+            .groups = "keep") 
+
+neo.max <- tT.data %>%
+  ungroup() %>%
+  filter(str_detect(Constraint, "C5")) %>%
+  group_by(Sample, Type, Fit) %>%
+  summarize(Type = unique(Type), Sample = unique(Sample), Fit = unique(Fit),
+            Max.Temp = max(Temp), Max.Time = Time[which(Temp == max(Temp))],
+            Min.Temp = min(Temp), Min.Time = Time[which(Temp == min(Temp))],
+            .groups = "keep") %>%
+  ungroup() %>%
+  group_by(Sample, Type) %>%
+  mutate(Family = case_when(all(Max.Temp < 140)  ~ "Required < PRZ",
+                            all(Max.Temp < 220) & any(Max.Temp < 140) ~ "Required PRZ or <",
+                            all(Max.Temp > 140) ~ "Required PRZ or >",
+                            .default = "Permissive")) %>%
+  mutate(Family_fac = factor(Family, levels = c("Permissive", "Required PRZ or >", "Required PRZ or <")))
+  
+```
+```{r REVISIT plot max neoproterozic heating model compilation grouped, echo = F}
+paths.limited <- neo.max
+n_family <- paths.limited %>%
+  ungroup() %>%
+  group_by(Type) %>%
+  count(Family_fac) %>%
+  mutate(n = n/1001)
+
+all.paths.Permissive <- paths.limited %>%
+  filter(Family_fac == "Permissive") %>%
+  ggplot() +
+  stat_density_2d(aes(x = Max.Time, y = Max.Temp, fill = ..level..), contour_var = "ndensity",
+                  geom = "polygon",
+                  alpha = 0.3) +
+  scale_fill_gradientn(colours = c("#2CA02C","white")) +
+  geom_polygon(data = cons.df, aes(x = Time, y = Temp, group = HeFTy.ID, colour = as.factor(Con.Type), linetype = as.factor(Con.Type)), fill = "transparent", linewidth = 0.5, alpha = 0.3) +
+  scale_color_manual(values = col_vals) +
+  scale_linetype_manual(values = line_vals) +
+  scale_x_reverse(name = "Time (Ma)", limits = c(1060, 460), breaks = seq(1060, 460, -100)) +
+  scale_y_reverse(name = "Temperature (°C)", limits = c(300, 0), breaks = seq(300, 0, -20)) +
+  theme(panel.background = element_rect(fill = "transparent", colour = "transparent", linewidth = 1),
+        panel.border = element_rect(fill = NA, color = "black", linewidth = 1),
+        axis.ticks = element_line(colour = "black", linewidth = 0.5),
+        axis.ticks.length = unit(-0.2,"cm"),
+        axis.text = element_text(size = 7),
+        axis.title = element_text(size = 9),
+        plot.margin = grid::unit(c(0,0,0,0), "mm"),
+        legend.background = element_rect(fill = NA, colour = NA),
+        legend.key = element_blank(),
+        legend.position = "bottom",
+        legend.text = element_text(size = 7),
+        legend.title = element_text(size = 9),
+        plot.title = element_text(hjust = 0.5)) +
+  facet_wrap(vars(as.factor(Type)), ncol  = 1)
+all.paths.Permissive
+ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Model.Max.Heating.Permissive.pdf", all.paths.Permissive, dpi = 300, width = 3.25, height = 7)
+
+all.paths.Cool <- paths.limited %>%
+  filter(Family_fac == "Required PRZ or <") %>%
+  ggplot() +
+  stat_density_2d(aes(x = Max.Time, y = Max.Temp, fill = ..level..), contour_var = "ndensity",
+                  geom = "polygon",
+                  alpha = 0.3) +
+  scale_fill_gradientn(colours = c("#1F77B4","white")) +
+  geom_polygon(data = cons.df, aes(x = Time, y = Temp, group = HeFTy.ID, colour = as.factor(Con.Type), linetype = as.factor(Con.Type)), fill = "transparent", linewidth = 0.5, alpha = 0.3) +
+  scale_color_manual(values = col_vals) +
+  scale_linetype_manual(values = line_vals) +
+  scale_x_reverse(name = "Time (Ma)", limits = c(1060, 460), breaks = seq(1060, 460, -100)) +
+  scale_y_reverse(name = "Temperature (°C)", limits = c(300, 0), breaks = seq(300, 0, -20)) +
+  theme(panel.background = element_rect(fill = "transparent", colour = "transparent", linewidth = 1),
+        panel.border = element_rect(fill = NA, color = "black", linewidth = 1),
+        axis.ticks = element_line(colour = "black", linewidth = 0.5),
+        axis.ticks.length = unit(-0.2,"cm"),
+        axis.text = element_text(size = 7),
+        axis.title = element_text(size = 9),
+        plot.margin = grid::unit(c(0,0,0,0), "mm"),
+        legend.background = element_rect(fill = NA, colour = NA),
+        legend.key = element_blank(),
+        legend.position = "bottom",
+        legend.text = element_text(size = 7),
+        legend.title = element_text(size = 9),
+        plot.title = element_text(hjust = 0.5)) +
+  facet_wrap(vars(as.factor(Type)), ncol  = 1)
+all.paths.Cool
+ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Model.Max.Heating.Cool.pdf", all.paths.Cool, dpi = 300, width = 3.25, height = 7)
+
+all.paths.Hot <- paths.limited %>%
+  filter(Family_fac == "Required PRZ or >") %>%
+  ggplot() +
+  stat_density_2d(aes(x = Max.Time, y = Max.Temp, fill = ..level..), contour_var = "ndensity",
+                  geom = "polygon",
+                  alpha = 0.3) +
+  scale_fill_gradientn(colours = c("#E73F74","white")) +
+  geom_polygon(data = cons.df, aes(x = Time, y = Temp, group = HeFTy.ID, colour = as.factor(Con.Type), linetype = as.factor(Con.Type)), fill = "transparent", linewidth = 0.5, alpha = 0.3) +
+  scale_color_manual(values = col_vals) +
+  scale_linetype_manual(values = line_vals) +
+  scale_x_reverse(name = "Time (Ma)", limits = c(1060, 460), breaks = seq(1060, 460, -100)) +
+  scale_y_reverse(name = "Temperature (°C)", limits = c(300, 0), breaks = seq(300, 0, -20)) +
+  theme(panel.background = element_rect(fill = "transparent", colour = "transparent", linewidth = 1),
+        panel.border = element_rect(fill = NA, color = "black", linewidth = 1),
+        axis.ticks = element_line(colour = "black", linewidth = 0.5),
+        axis.ticks.length = unit(-0.2,"cm"),
+        axis.text = element_text(size = 7),
+        axis.title = element_text(size = 9),
+        plot.margin = grid::unit(c(0,0,0,0), "mm"),
+        legend.background = element_rect(fill = NA, colour = NA),
+        legend.key = element_blank(),
+        legend.position = "bottom",
+        legend.text = element_text(size = 7),
+        legend.title = element_text(size = 9),
+        plot.title = element_text(hjust = 0.5)) +
+  facet_wrap(vars(as.factor(Type)), ncol  = 1)
+all.paths.Hot
+ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Model.Max.Heating.Hot.pdf", all.paths.Hot, dpi = 300, width = 3.25, height = 7)
+```
+```{r plot neoproterozoic points, echo = FALSE}
+neo.points <- neo.points %>%
+  ungroup() %>%
+  ggplot(aes(x = Max.Time, y = Max.Temp, color = as.factor(Type))) +
+  geom_point(alpha = 1) +
+  #geom_point(aes(x = Min.Time, y = Min.Temp), alpha = 0.5) +
+  scale_x_reverse(name = "Time (Ma)", limits = c(450, 1000), breaks = seq(450, 1000, 50)) +
+  scale_y_reverse(name = "Temperature (°C)", limits = c(0, 300), breaks = seq(0, 300, 50)) +
+  #coord_cartesian(xlim = axes$Time, ylim = axes$Temp) +
+  #geom_polygon(data = cons.df[cons.df$Type %in% "Constraint", ], mapping = aes(x = Time, y = Temp, group = Num), colour = "red", linewidth = 0.5, fill = "transparent") +
+  theme(panel.background = element_rect(fill = "transparent", color = "transparent", linewidth = 1),
+        panel.border = element_rect(fill = NA, color = "black", linewidth = 1),
+        axis.ticks = element_line(colour = "black", linewidth = 0.5),
+        axis.ticks.length = unit(-0.2,"cm"),
+        panel.grid.major = element_line(colour = "gray", linewidth = 0.25, linetype = 'dashed'),
+        plot.margin = grid::unit(c(0,0,0,0), "mm"),
+        legend.position = "bottom")
+neo.points
+```
+```{r plot neoproterozoic envelope, echo = FALSE}
+neo.plot <- neo.envelopes %>%
+  ungroup() %>%
+  ggplot(aes(x = Max.Time, y = Max.Temp, color = as.factor(Type), alpha = as.factor(Constraint))) +
+  geom_point() +
+  #geom_point(aes(x = Min.Time, y = Min.Temp), alpha = 0.5) +
+  scale_x_reverse(name = "Time (Ma)", limits = c(450, 1000), breaks = seq(450, 1000, 50)) +
+  scale_y_reverse(name = "Temperature (°C)", limits = c(0, 300), breaks = seq(0, 300, 50)) +
+  scale_alpha_manual(values = c("C5Sub0" = 1, "C5Sub1" = 0.75,
+                                "C5Sub2" = 0.5, "C5Sub3" = 0.25)) +
+  #coord_cartesian(xlim = axes$Time, ylim = axes$Temp) +
+  #geom_polygon(data = cons.df[cons.df$Type %in% "Constraint", ], mapping = aes(x = Time, y = Temp, group = Num), colour = "red", linewidth = 0.5, fill = "transparent") +
+  theme(panel.background = element_rect(fill = "transparent", color = "transparent", linewidth = 1),
+        panel.border = element_rect(fill = NA, color = "black", linewidth = 1),
+        axis.ticks = element_line(colour = "black", linewidth = 0.5),
+        axis.ticks.length = unit(-0.2,"cm"),
+        panel.grid.major = element_line(colour = "gray", linewidth = 0.25, linetype = 'dashed'),
+        plot.margin = grid::unit(c(0,0,0,0), "mm"),
+        legend.position = "bottom") # +
+  #facet_wrap(vars(as.factor(Constraint)), ncol = 1)
+neo.plot
+```
+
+```{r plot neoproterozoic density, echo = FALSE}
+family.cols <- c("Required PRZ or <" = "#1F77B4", "Permissive" = "#2CA02C",
+                 "Required PRZ or >" = "#E73F74")
+neo.density <- tT.data %>%
+  left_join(neo.max, by = c("Sample", "Type", "Fit")) %>%
+  ungroup() %>%
+  filter(str_detect(Constraint, "C4", negate = TRUE)) %>%
+  #mutate(Type.fac = factor(Type, levels = c("Less_Restrictive", "More_Restrictive", "Most_Restrictive"))) %>%
+  #mutate(Sample.Lab = paste(Sample, ZHe.Report, "Ma", sep = " ")) %>%
+  #group_by(Sample) %>%
+  ggplot(aes(x = Time, y = Temp, group = interaction(Type, Constraint), color = as.factor(Family), fill = after_scale(color))) +
+  #stat_density_2d(contour_var = "ndensity") +
+  stat_density_2d(aes(x = Time, y = Temp, fill = after_stat(level)), contour_var = "ndensity", geom = "polygon") +
+  scale_color_manual(values = family.cols) +
+  #scale_x_reverse(name = "Time (Ma)", limits = c(0, 1000), breaks = seq(0, 1000, 200)) +
+  scale_x_reverse(name = "Time (Ma)") +
+  scale_y_reverse(name = "Temperature (°C)", limits = c(0, 300), breaks = seq(0, 300, 50)) +
+  #ggtitle(label = "Most Restrictive") +
+  #coord_cartesian(xlim = axes$Time, ylim = axes$Temp) +
+  #geom_polygon(data = cons.df[cons.df$Type %in% "Constraint", ], mapping = aes(x = Time, y = Temp, group = Num), colour = "red", linewidth = 0.5, fill = "transparent") +
+  theme(panel.background = element_rect(fill = "transparent", color = "transparent", linewidth = 1),
+        panel.border = element_rect(fill = NA, color = "black", linewidth = 1),
+        axis.ticks = element_line(colour = "black", linewidth = 0.5),
+        axis.ticks.length = unit(-0.2,"cm"),
+        panel.grid.major = element_line(colour = "gray", linewidth = 0.25, linetype = 'dashed'),
+        plot.margin = grid::unit(c(0,0,0,0), "mm"),
+        legend.position = "bottom") +
+  facet_grid(Family ~ Constraint, scales = "free_x")
+neo.density
+
+ggsave("/Volumes/LaCie/Jacobsville_Models_2025/tT_all_density_most_restrictive.pdf", plot = neo.density, width = 15, height = 4)
+
+neo.density.all <- tT.data %>%
+  left_join(neo.max, by = c("Sample", "Type", "Fit")) %>%
+  ungroup() %>%
+  filter(str_detect(Constraint, "C5", negate = FALSE)) %>%
+  #filter(between(Time, 497, 985)) %>%
+  #mutate(Type.fac = factor(Type, levels = c("Less_Restrictive", "More_Restrictive", "Most_Restrictive"))) %>%
+  #mutate(Sample.Lab = paste(Sample, ZHe.Report, "Ma", sep = " ")) %>%
+  #group_by(Sample) %>%
+  ggplot(aes(x = Time, y = Temp, group = interaction(Type, Family), color = as.factor(Family), fill = after_scale(color))) +
+  #stat_density_2d(contour_var = "ndensity") +
+  stat_density_2d(aes(x = Time, y = Temp, fill = after_stat(level)), contour_var = "ndensity", geom = "polygon") +
+  scale_color_manual(values = family.cols) +
+  #scale_x_reverse(name = "Time (Ma)", limits = c(0, 1000), breaks = seq(0, 1000, 200)) +
+  scale_x_reverse(name = "Time (Ma)") +
+  scale_y_reverse(name = "Temperature (°C)", limits = c(0, 300), breaks = seq(0, 300, 50)) +
+  #ggtitle(label = "Most Restrictive") +
+  #coord_cartesian(xlim = axes$Time, ylim = axes$Temp) +
+  #geom_polygon(data = cons.df[cons.df$Type %in% "Constraint", ], mapping = aes(x = Time, y = Temp, group = Num), colour = "red", linewidth = 0.5, fill = "transparent") +
+  theme(panel.background = element_rect(fill = "transparent", color = "transparent", linewidth = 1),
+        panel.border = element_rect(fill = NA, color = "black", linewidth = 1),
+        axis.ticks = element_line(colour = "black", linewidth = 0.5),
+        axis.ticks.length = unit(-0.2,"cm"),
+        panel.grid.major = element_line(colour = "gray", linewidth = 0.25, linetype = 'dashed'),
+        plot.margin = grid::unit(c(0,0,0,0), "mm"),
+        legend.position = "bottom") +
+  facet_wrap(vars(as.factor(Type)), ncol = 1)
+neo.density.all
+```
+```{r plot all tT by sample, echo = FALSE}
+tT.all <- tT.data %>%
+  mutate(Type.fac = factor(Type, levels = c("Less_Restrictive", "More_Restrictive", "Most_Restrictive"))) %>%
+  mutate(Sample.Lab = paste(Sample, ZHe.Report, "Ma", sep = " ")) %>%
+  group_by(Sample) %>%
+  ggplot(aes(x = Time, y = Temp, group = interaction(Fit, Type.fac), color = Type.fac)) +
+  geom_point(size = 0.5) +
+  #scale_color_manual(values = hefty.cols) +
+  scale_x_reverse(name = "Time (Ma)", limits = c(0, 1000), breaks = seq(0, 1000, 200)) +
+  scale_y_reverse(name = "Temperature (°C)", limits = c(0, 300), breaks = seq(0, 300, 50)) +
+  #coord_cartesian(xlim = axes$Time, ylim = axes$Temp) +
+  #geom_polygon(data = cons.df[cons.df$Type %in% "Constraint", ], mapping = aes(x = Time, y = Temp, group = Num), colour = "red", linewidth = 0.5, fill = "transparent") +
+  theme(panel.background = element_rect(fill = "transparent", color = "transparent", linewidth = 1),
+        panel.border = element_rect(fill = NA, color = "black", linewidth = 1),
+        axis.ticks = element_line(colour = "black", linewidth = 0.5),
+        axis.ticks.length = unit(-0.2,"cm"),
+        panel.grid.major = element_line(colour = "gray", linewidth = 0.25, linetype = 'dashed'),
+        plot.margin = grid::unit(c(0,0,0,0), "mm"),
+        legend.position = "bottom") +
+  facet_wrap(vars(as.factor(Sample.Lab)), nrow = 5)
+tT.all
+
+ggsave("/Volumes/LaCie/Jacobsville_Models_2025/all_samples_points.pdf", plot = tT.all, width = 15, height = 9)
+  
+```
+```{r OLD models}
 date.predictions <- data.frame("Hft.File" = NA, "Sample" = NA, "Path"  = NA,
                                "Com.GOF" = NA, "Date" = NA, "GOF" = NA)
 date.predictions <- date.predictions[F, ]
@@ -1103,47 +1449,38 @@ for(i in 1:length(files)){
               .groups = "keep") %>%
     mutate(Hft.File = hft.file)
   pre.deposition.summary <- rbind(pre.deposition.summary, all_pre_paths)
-
+  print(paste(i, samples, sep = " "))
 }
 tictoc::toc()
 ```
 ```{r merge model predictions with data}
-data_merge <- ZHe_plot_data %>%
-  is.na(Rejection) %>%
-  mutate(FT_date_plot = case_when(is.na(Corrected_Date.No.FT.Inheritance) == F ~ Corrected_Date.No.FT.Inheritance,
-                                  .default = ZHe.Report)) %>%
-  mutate(FT_date_plot.1s = case_when(is.na(Corrected_Date.No.FT.Inheritance) == F ~ Corrected.Date.No.FT.Inheritance.Analytical.Uncertainty.1s,
-                                  .default = ZHe.Report.1s)) %>%
-  mutate(FT.Applied = case_when(is.na(Corrected_Date.No.FT.Inheritance) == F ~ "Since Deposition Only",
-                                .default = FT.Applied))
-
 all_dates <- date.predictions %>%
   separate_wider_delim(Sample, "_", names = c("Run", "Grain")) %>%
   mutate(Grain = gsub("z", "", Grain)) %>%
   mutate(across(c("Run", "Grain"), as.numeric)) %>%
   mutate("Sample" = "BP22-02", .after = 2) %>%
-  full_join(data_merge, by = c("Run", "Sample", "Grain"))
+  full_join(ZHe_plot_data, by = c("Run", "Sample", "Grain"))
 
 neo.heating.summary <- neo.heating.summary %>%
   separate_wider_delim(Sample, "_", names = c("Run", "Grain")) %>%
   mutate(Grain = gsub("z", "", Grain)) %>%
   mutate(across(c("Run", "Grain"), as.numeric)) %>%
   mutate("Sample" = "BP22-02", .after = 2) %>%
-  full_join(data_merge, by = c("Run", "Sample", "Grain"))
+  full_join(ZHe_plot_data, by = c("Run", "Sample", "Grain"))
 
 pre.deposition.summary <- pre.deposition.summary %>%
   separate_wider_delim(Sample, "_", names = c("Run", "Grain")) %>%
   mutate(Grain = gsub("z", "", Grain)) %>%
   mutate(across(c("Run", "Grain"), as.numeric)) %>%
   mutate("Sample" = "BP22-02", .after = 2) %>%
-  full_join(data_merge, by = c("Run", "Sample", "Grain"))
+  full_join(ZHe_plot_data, by = c("Run", "Sample", "Grain"))
 
 all.paths <- all.paths %>%
   separate_wider_delim(Sample, "_", names = c("Run", "Grain")) %>%
   mutate(Grain = gsub("z", "", Grain)) %>%
   mutate(across(c("Run", "Grain"), as.numeric)) %>%
   mutate("Sample" = "BP22-02", .after = 2) %>%
-  full_join(data_merge, by = c("Run", "Sample", "Grain"))
+  full_join(ZHe_plot_data, by = c("Run", "Sample", "Grain"))
 ```
 ```{r plot pre-deposition cooling, echo = F}
 # plot shows that grains likely exhumed at variable times, though they can ALL exhume during Rigolet Orogeny
@@ -1199,16 +1536,27 @@ pre.dep.cooling.plot
 #ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Model.Deposition.Time.pdf", pre.dep.cooling.plot, dpi = 300, height = 6.5, width = 6.5)
 ```
 ```{r plot max neoproterozic heating model compilation, echo = F}
+# all.paths.filtered <- all.paths %>%
+#   filter(Type == "Good" | Type == "Best") %>%
+#   ungroup() %>%
+#   mutate(Analysis = paste(Run, Sample, Grain, sep = "_")) %>%
+#   group_by(Analysis) %>%
+#   mutate(Family = case_when(all(Max.Temp < 140)  ~ "Required < PRZ",
+#                             all(Max.Temp < 220) & any(Max.Temp < 140) ~ "Required PRZ or <",
+#                             all(Max.Temp > 140) ~ "Required PRZ or >",
+#                             .default = "Permissive")) %>%
+#   mutate(Family_fac = factor(Family, levels = c("Permissive", "Required PRZ or >", "Required PRZ or <")))
+
+# 160-180 degrees C
 all.paths.filtered <- all.paths %>%
   filter(Type == "Good" | Type == "Best") %>%
   ungroup() %>%
   mutate(Analysis = paste(Run, Sample, Grain, sep = "_")) %>%
   group_by(Analysis) %>%
-  mutate(Family = case_when(all(Max.Temp < 140)  ~ "Required < PRZ",
-                            all(Max.Temp < 220) & any(Max.Temp < 140) ~ "Required PRZ or <",
-                            all(Max.Temp > 140) ~ "Required PRZ or >",
+  mutate(Family = case_when(all(Max.Temp < 170)  ~ "Required < 170",
+                            all(Max.Temp > 170) ~ "Required > 170",
                             .default = "Permissive")) %>%
-  mutate(Family_fac = factor(Family, levels = c("Permissive", "Required PRZ or >", "Required PRZ or <")))
+  mutate(Family_fac = factor(Family, levels = c("Permissive", "Required > 170", "Required < 170")))
 
 filter.summary.Family <- all.paths.filtered %>%
   ungroup() %>%
@@ -1220,7 +1568,12 @@ filter.summary.Family <- all.paths.filtered %>%
 all.paths.filtered <- all.paths.filtered %>%
   left_join(filter.summary.Family, by = "Family")
 
-all.paths.plot <- all.paths.filtered %>%  
+all.paths.plot <- all.paths.filtered %>%
+  # ungroup() %>%
+  # group_by(Analysis) %>%
+  # mutate(Time = case_when(all(Max.Time > 850) ~ "Required > 850",
+  #                         all(Max.Time < 850) ~ "Required < 850",
+  #                         .default = "Permissive")) %>%
   group_by(Family, .add = TRUE) %>%
   ggplot(aes(x = Max.Time, y = Max.Temp, color = ZHe.Report)) +
   #annotate("rect", xmin = 1000, xmax = 700, ymin = 130, ymax = 250, alpha = 0.1, fill = "orange") +
@@ -1230,7 +1583,7 @@ all.paths.plot <- all.paths.filtered %>%
   geom_point() +
   scale_x_reverse(name = "Time (Ma)") +
   scale_y_reverse(name = "Temp (°C)", limits = c(300, 0), breaks = seq(300, 0, -50)) +
-  geom_text(aes(x = 800, y = 300, label = paste("n =", nfam, "grains", sep = " ")), color = "black", size = 2) +
+  #geom_text(aes(x = 800, y = 300, label = paste("n =", nfam, "grains", sep = " ")), color = "black", size = 2) +
   scale_color_viridis(name = "ZHe Date (Ma)", limits = c(375, 1400)) +
   ggtitle("Modeled Maximum Neoproterozoic Temperature and Time") +
   theme(panel.background = element_rect(fill = "transparent", colour = "transparent", linewidth = 1),
@@ -1246,9 +1599,14 @@ all.paths.plot <- all.paths.filtered %>%
         legend.text = element_text(size = 9),
         legend.title = element_text(size = 11),
         plot.title = element_text(hjust = 0.5)) +
-  facet_wrap(vars(as.factor(Family)))
+  facet_wrap(vars(Family_fac))
 all.paths.plot
+
 ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Model.Max.Heating.Family.pdf", all.paths.plot, dpi = 300, height = 6.5, width = 6.5)
+```
+```{r test}
+GMCR <- all_data %>%
+  filter(Pb207.Pb206_Date < 1300)
 ```
 ```{r plot max neoproterozic heating grouped by type of heating, echo = F}
 max.max.temp <- all.paths.filtered %>%
@@ -1267,11 +1625,11 @@ all.paths.max <- all.paths.filtered %>%
 
 neo.heat.permissive <- all.paths.max %>%  
   ungroup() %>% # have to do this to use fct_reorder
-  filter(Family == "Permissive") %>%
-  filter(between(Max.Temp, 130, 250)) %>% # only PRZ
+  #filter(Family == "Permissive") %>%
+  #filter(between(Max.Temp, 130, 250)) %>% # only PRZ
   arrange(Max.Max.Temp) %>%
   mutate(Analysis_fac = fct_reorder(Analysis, Max.Max.Temp)) %>%
-  ggplot(aes(x = Max.Time, y = Max.Temp, color = GOF, shape = FT.Applied)) +
+  ggplot(aes(x = Max.Time, y = Max.Temp, color = GOF, shape = FT.Applied.Extra)) +
   #annotate("rect", xmin = 1000, xmax = 700, ymin = 130, ymax = 250, alpha = 0.1, fill = "orange") +
   #annotate("rect", xmin = 1000, xmax = 700, ymin = 172.5, ymax = 182.5, alpha = 0.1, fill = "black") +
   geom_hline(yintercept = 140, color = "black", linetype = "dashed") +
@@ -1280,8 +1638,8 @@ neo.heat.permissive <- all.paths.max %>%
   scale_x_reverse(name = "Time (Ma)") +
   scale_y_reverse(name = "Temp (°C)", limits = c(300, 0), breaks = seq(300, 0, -50)) +
   geom_text(aes(x = 600, y = 250, label = paste(ZHe.Report, "±", ZHe.Report.1s, "Ma", sep = " ")), color = "black", size = 2) +
-  scale_color_viridis(name = "GOF", limits = c(0.7, 1), na.value = "gray") +
-  scale_shape_manual(values = c("No" = 15, "Yes" = 16, "Since Deposition Only" = 17), name = "FT Applied") +
+  scale_color_viridis(name = "GOF", limits = c(0.5, 1), na.value = "gray") +
+  scale_shape_manual(values = c("None" = 15, "Conventional" = 16, "Since Deposition Only" = 17), name = "FT Applied") +
   #ggtitle("Modeled Maximum Neoproterozoic Temperature and Time") +
   theme(panel.background = element_rect(fill = "transparent", colour = "transparent", linewidth = 1),
         panel.border = element_rect(fill = NA, color = "black", linewidth = 1),
@@ -1296,18 +1654,18 @@ neo.heat.permissive <- all.paths.max %>%
         legend.text = element_text(size = 9),
         legend.title = element_text(size = 11),
         plot.title = element_text(hjust = 0.5)) +
-  facet_wrap(~Analysis_fac, ncol = 3, dir = "h")
+  facet_wrap(vars(Analysis_fac), ncol = 3, dir = "h")
 neo.heat.permissive
-ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Model.Max.Heating.Permissive.PRZ.pdf", neo.heat.permissive, dpi = 300, height = 17, width = 6.5)
+ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Model.Max.Heating.Permissive.PRZ.pdf", neo.heat.permissive, dpi = 300, height = 34, width = 6.5)
 
 
 neo.heat.cool <- all.paths.max %>%  
   ungroup() %>% # have to do this to use fct_reorder
   filter(Family == "Required PRZ or <") %>%
-  filter(between(Max.Temp, 130, 250)) %>% # only PRZ
+  #filter(between(Max.Temp, 130, 250)) %>% # only PRZ
   arrange(Max.Max.Temp) %>%
   mutate(Analysis_fac = fct_reorder(Analysis, Max.Max.Temp)) %>%
-  ggplot(aes(x = Max.Time, y = Max.Temp, color = GOF, shape = FT.Applied)) +
+  ggplot(aes(x = Max.Time, y = Max.Temp, color = GOF, shape = FT.Applied.Extra)) +
   #annotate("rect", xmin = 1000, xmax = 700, ymin = 130, ymax = 250, alpha = 0.1, fill = "orange") +
   #annotate("rect", xmin = 1000, xmax = 700, ymin = 172.5, ymax = 182.5, alpha = 0.1, fill = "black") +
   geom_hline(yintercept = 140, color = "black", linetype = "dashed") +
@@ -1319,8 +1677,8 @@ neo.heat.cool <- all.paths.max %>%
   geom_text(aes(x = 600, y = 250, label = paste(ZHe.Report, "±", ZHe.Report.1s, "Ma", sep = " ")), color = "black", size = 3) +
   geom_text(aes(x = 600, y = 175, label = paste(round(Max.Max.Temp, 0), "°C", sep = " ")), color = "gray", size = 3) +
   #scale_color_viridis(name = "ZHe Date (Ma)", limits = c(375, 1400)) +
-  scale_color_viridis(name = "GOF", limits = c(0.7, 1), na.value = "gray") +
-  scale_shape_manual(values = c("No" = 15, "Yes" = 16, "Since Deposition Only" = 17), name = "FT Applied") +
+  scale_color_viridis(name = "GOF", limits = c(0.5, 1), na.value = "gray") +
+  scale_shape_manual(values = c("None" = 15, "Conventional" = 16, "Since Deposition Only" = 17), name = "FT Applied") +
   #ggtitle("Modeled Maximum Neoproterozoic Temperature and Time") +
   theme(panel.background = element_rect(fill = "transparent", colour = "transparent", linewidth = 1),
         panel.border = element_rect(fill = NA, color = "black", linewidth = 1),
@@ -1342,10 +1700,10 @@ ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Output
 neo.heat.hot <- all.paths.max %>%  
   ungroup() %>% # have to do this to use fct_reorder
   filter(Family == "Required PRZ or >") %>%
-  filter(between(Max.Temp, 130, 250)) %>% # only PRZ
+  #filter(between(Max.Temp, 130, 250)) %>% # only PRZ
   arrange(Min.Max.Temp) %>%
   mutate(Analysis_fac = fct_reorder(Analysis, Min.Max.Temp)) %>%
-  ggplot(aes(x = Max.Time, y = Max.Temp, color = GOF, shape = FT.Applied)) +
+  ggplot(aes(x = Max.Time, y = Max.Temp, color = GOF, shape = FT.Applied.Extra)) +
   #annotate("rect", xmin = 1000, xmax = 700, ymin = 130, ymax = 250, alpha = 0.1, fill = "orange") +
   #annotate("rect", xmin = 1000, xmax = 700, ymin = 172.5, ymax = 182.5, alpha = 0.1, fill = "black") +
   geom_hline(yintercept = 140, color = "black", linetype = "dashed") +
@@ -1356,8 +1714,8 @@ neo.heat.hot <- all.paths.max %>%
   scale_y_reverse(name = "Temp (°C)", limits = c(300, 0), breaks = seq(300, 0, -50)) +
   geom_text(aes(x = 600, y = 250, label = paste(ZHe.Report, "±", ZHe.Report.1s, "Ma", sep = " ")), color = "black", size = 3) +
   geom_text(aes(x = 600, y = 50, label = paste(round(Min.Max.Temp,0) , "°C", sep = " ")), color = "gray", size = 3) +
-  scale_color_viridis(name = "GOF", limits = c(0.7, 1), na.value = "gray") +
-  scale_shape_manual(values = c("No" = 15, "Yes" = 16, "Since Deposition Only" = 17), name = "FT Applied") +
+  scale_color_viridis(name = "GOF", limits = c(0.5, 1), na.value = "gray") +
+  scale_shape_manual(values = c("None" = 15, "Conventional" = 16, "Since Deposition Only" = 17), name = "FT Applied") +
   #ggtitle("Modeled Maximum Neoproterozoic Temperature and Time") +
   theme(panel.background = element_rect(fill = "transparent", colour = "transparent", linewidth = 1),
         panel.border = element_rect(fill = NA, color = "black", linewidth = 1),
@@ -1376,21 +1734,53 @@ neo.heat.hot <- all.paths.max %>%
 neo.heat.hot
 ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Model.Max.Heating.Hot.PRZ.pdf", neo.heat.hot, dpi = 300, height = 8.2, width = 6.5)
 ```
-```{r plot max neoproterozic heating model compilation, echo = F}
-all.paths.overlay <- all.paths.filtered %>%  
-  group_by(Family_fac, .add = TRUE) %>%
-  arrange(Family_fac) %>%
-  ggplot(aes(x = Max.Time, y = Max.Temp, colour = Family_fac)) +
+```{r REVISIT plot max neoproterozic heating model compilation grouped, echo = F}
+paths.limited <- all.paths.filtered #%>%  
+  #group_by(Family_fac, .add = TRUE) %>%
+  #arrange(Family_fac) %>%
+  #filter(between(Max.Temp, 130, 250))
+n_family <- paths.limited %>%
+  ungroup() %>%
+  count(Family_fac)
+
+all.paths.overlay <- paths.filtered %>%
+  ggplot() +
   #annotate("rect", xmin = 1000, xmax = 700, ymin = 130, ymax = 250, alpha = 0.1, fill = "orange") +
   #annotate("rect", xmin = 1000, xmax = 700, ymin = 172.5, ymax = 182.5, alpha = 0.1, fill = "black") +
   geom_hline(yintercept = 140, color = "black", linetype = "dashed", alpha = 1) +
   geom_hline(yintercept = 220, color = "black", linetype = "dashed", alpha = 1) +
-  geom_point(shape = 16, size = 0.5, alpha = 1) +
-  scale_colour_manual(values = c("Permissive" = "green", "Required PRZ or >" = "red", "Required PRZ or <" = "blue")) +
-  scale_x_reverse(name = "Time (Ma)") +
-  scale_y_reverse(name = "Temp (°C)", limits = c(300, 0), breaks = seq(300, 0, -50)) +
+  #stat_density_2d(aes(fill = ..level..), geom = "polygon", alpha = 0.5) +
+  stat_density_2d(aes(x = Max.Time, y = Max.Temp, fill = ..level..), contour_var = "ndensity",
+                  filter(paths.limited, Family_fac == "Permissive"),
+                  geom = "polygon",
+                  alpha = 0.3) +
+  scale_fill_gradientn(colours = c("#2CA02C","white")) +
+  labs(fill = paste(n_family$Family_fac[1], paste("n = ", n_family$n[1]), sep = "\n")) +
+  new_scale_fill() +
+  stat_density_2d(aes(x = Max.Time, y = Max.Temp, fill = ..level..), contour_var = "ndensity",
+                  filter(paths.limited, Family_fac == "Required PRZ or <"),
+                  geom = "polygon",
+                  alpha = 0.3) +
+  scale_fill_gradientn(colours = c("#1F77B4","white")) +
+  labs(fill = paste(n_family$Family_fac[3], paste("n = ", n_family$n[3]), sep = "\n")) +
+  new_scale_fill() +
+  stat_density_2d(aes(x = Max.Time, y = Max.Temp, fill = ..level..), contour_var = "ndensity",
+                  filter(paths.limited, Family_fac == "Required PRZ or >"),
+                  geom = "polygon",
+                  alpha = 0.3) +
+  scale_fill_gradientn(colours = c("#E73F74","white")) +
+  labs(fill = paste(n_family$Family_fac[2], paste("n = ", n_family$n[2]), sep = "\n")) +
+  annotate("rect", xmax = 993.15, xmin = 730, ymin = 140, ymax = 220, color = "black", fill = "transparent") +
+  annotate("rect", xmax = 993.15, xmin = 949.7, ymin = 0, ymax = 20, color = "blue", linetype = "dashed", fill = "transparent") +
+  annotate("rect", xmax = 993, xmin = 700, ymin = 130, ymax = 250, color = "orange", linetype = "dashed", fill = "transparent") +
+  annotate("rect", xmax = 700, xmin = 487, ymin = 0, ymax = 40, color = "black", linetype = "dashed", fill = "transparent") +
+  #stat_density_2d() +
+  #geom_point(shape = 16, size = 0.5, alpha = 1) +
+  #scale_colour_manual(values = c("Permissive" = "green", "Required PRZ or >" = "red", "Required PRZ or <" = "blue")) +
+  scale_x_reverse(name = "Time (Ma)", limits = c(1050, 430), breaks = seq(1000, 500, -100)) +
+  scale_y_reverse(name = "Temp (°C)", limits = c(300, 0), breaks = seq(300, 0, -20)) +
   #geom_text(aes(x = 800, y = 300, label = paste("n =", nfam, "grains", sep = " ")), color = "black", size = 2) +
-  #scale_color_viridis(name = "ZHe Date (Ma)", limits = c(375, 1400)) +
+  #scale_fill_viridis(name = "Density") +
   #ggtitle("Modeled Maximum Neoproterozoic Temperature and Time") +
   theme(panel.background = element_rect(fill = "transparent", colour = "transparent", linewidth = 1),
         panel.border = element_rect(fill = NA, color = "black", linewidth = 1),
@@ -1401,11 +1791,55 @@ all.paths.overlay <- all.paths.filtered %>%
         plot.margin = grid::unit(c(0,0,0,0), "mm"),
         legend.background = element_rect(fill = NA, colour = NA),
         legend.key = element_blank(),
-        legend.position = "bottom",
+        legend.position = "right",
         legend.text = element_text(size = 9),
         legend.title = element_text(size = 11),
         plot.title = element_text(hjust = 0.5)) #+
-  # facet_wrap(vars(interaction(as.factor(Family))))
+  #facet_wrap(vars(Family_fac))
 all.paths.overlay
-ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Model.Max.Heating.Overlay.pdf", all.paths.overlay, dpi = 300, height = 6.5, width = 6.5)
+ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Model.Max.Heating.Overlay.pdf", all.paths.overlay, dpi = 300, height = 5, width = 6.5)
+```
+```{r plot max neoproterozic heating model compilation 160-180, echo = F}
+paths.limited <- all.paths.filtered
+
+all.paths.overlay <- paths.limited %>%
+  ggplot() +
+  #annotate("rect", xmin = 1000, xmax = 700, ymin = 130, ymax = 250, alpha = 0.1, fill = "orange") +
+  #annotate("rect", xmin = 1000, xmax = 700, ymin = 172.5, ymax = 182.5, alpha = 0.1, fill = "black") +
+  geom_hline(yintercept = 140, color = "black", linetype = "dashed", alpha = 1) +
+  geom_hline(yintercept = 220, color = "black", linetype = "dashed", alpha = 1) +
+  #stat_density_2d(aes(fill = ..level..), geom = "polygon", alpha = 0.5) +
+  stat_density_2d(aes(x = Max.Time, y = Max.Temp, fill = ..level..), contour_var = "ndensity",
+                  geom = "polygon",
+                  alpha = 1) +
+  scale_fill_gradientn(colours = c("#6699CC","white")) +
+  labs(fill = paste("Permissive", paste("n = ", 48), sep = "\n")) +
+  annotate("rect", xmax = 993.15, xmin = 730, ymin = 140, ymax = 220, color = "black", fill = "transparent") +
+  annotate("rect", xmax = 993.15, xmin = 949.7, ymin = 0, ymax = 20, color = "blue", linetype = "dashed", fill = "transparent") +
+  annotate("rect", xmax = 993, xmin = 700, ymin = 160, ymax = 180, color = "orange", linetype = "dashed", fill = "transparent") +
+  annotate("rect", xmax = 700, xmin = 487, ymin = 0, ymax = 40, color = "black", linetype = "dashed", fill = "transparent") +
+  #stat_density_2d() +
+  #geom_point(shape = 16, size = 0.5, alpha = 1) +
+  #scale_colour_manual(values = c("Permissive" = "green", "Required PRZ or >" = "red", "Required PRZ or <" = "blue")) +
+  scale_x_reverse(name = "Time (Ma)", limits = c(1050, 430), breaks = seq(1000, 500, -100)) +
+  scale_y_reverse(name = "Temp (°C)", limits = c(300, 0), breaks = seq(300, 0, -20)) +
+  #geom_text(aes(x = 800, y = 300, label = paste("n =", nfam, "grains", sep = " ")), color = "black", size = 2) +
+  #scale_fill_viridis(name = "Density") +
+  #ggtitle("Modeled Maximum Neoproterozoic Temperature and Time") +
+  theme(panel.background = element_rect(fill = "transparent", colour = "transparent", linewidth = 1),
+        panel.border = element_rect(fill = NA, color = "black", linewidth = 1),
+        axis.ticks = element_line(colour = "black", linewidth = 0.5),
+        axis.ticks.length = unit(-0.2,"cm"),
+        axis.text = element_text(size = 9),
+        axis.title = element_text(size = 11),
+        plot.margin = grid::unit(c(0,0,0,0), "mm"),
+        legend.background = element_rect(fill = NA, colour = NA),
+        legend.key = element_blank(),
+        legend.position = "right",
+        legend.text = element_text(size = 9),
+        legend.title = element_text(size = 11),
+        plot.title = element_text(hjust = 0.5)) #+
+  #facet_wrap(vars(Family_fac))
+all.paths.overlay
+ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Model.Max.Heating.Overlay.blue.pdf", all.paths.overlay, dpi = 300, height = 5, width = 6.5)
 ```

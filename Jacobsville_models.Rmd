@@ -1,0 +1,417 @@
+---
+title: "Jacobsville_Models"
+author: "Barra Peak"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(openxlsx) # read in and export microsoft excel files
+library(dplyr) # easier datatable handling
+library(tidyverse) # for easier datatable handling
+library(stringr) # for easier character data handling
+library(tibble) # for easier datatable rearranging
+library(forcats) # data handling
+library(tictoc)
+```
+
+## Jacobsville Models
+
+This R Markdown file inputs and extracts information from HeFTy output .txt files.
+
+```{r import and extract model information, echo = FALSE}
+path.root <- "/Volumes/LaCie/Jacobsville_Models_2025"
+directories <- c("Less_Restrictive", "More_Restrictive", "Most_Restrictive")
+
+tic()
+for(i in 1:length(directories)){ 
+#for(i in 1:1){ #test
+  path.name <- paste(path.root, directories[i], sep = "/")
+  files <- list.files(path = path.name, pattern = ".txt", all.files = TRUE)
+  files <- files[str_starts(files, "._", negate = T)]
+  
+  tic()
+  for(j in 1:length(files)){
+  #for(j in 1:2){ #test
+    file.name <- paste(path.name, files[j], sep = "/")
+    Sample_j <- substr(files[j], nchar(files[j]) - 9, nchar(files[j])-4)
+    hft.file <- strsplit(files[j], "-inv-")[[1]][1]
+    file <- read_lines(file.name) # import using file path
+  
+    #### Isolate Constraints ----
+    con_bounds <- which(str_detect(file, "^Inversion completed"))
+    con_data <- file[(3:con_bounds[1] - 1)]
+    con_data <- matrix(con_data)
+    con_data_df <- data.frame(t(sapply(strsplit(con_data, '\t'), c)))
+    con_header <- make.names(con_data_df[1, ], unique = TRUE)
+    con_data_df <- con_data_df[-1, ]
+    colnames(con_data_df) <- con_header
+    
+    # Clean constraints data frame
+    con_data_df_cl <- con_data_df[ , !grepl("acc", names(con_data_df))]
+    con_data_df_cl <- con_data_df_cl %>%
+      rename("HeFTy.ID" = "Number") %>%
+      mutate(across(everything(), as.numeric)) %>%
+      mutate(Sample = Sample_j) %>%
+      mutate(Table.ID = case_when(HeFTy.ID == 1 ~ "1a",
+                                  HeFTy.ID == 2 ~ "1a.1",
+                                  HeFTy.ID == 3 ~ "1a.2",
+                                  HeFTy.ID == 4 ~ "2a",
+                                  HeFTy.ID == 5 ~ "2b",
+                                  HeFTy.ID == 6 ~ "2b.1",
+                                  HeFTy.ID == 7 ~ "3a",
+                                  HeFTy.ID == 8 ~ "3b",
+                                  HeFTy.ID == 9 ~ "3b.1",
+                                  HeFTy.ID == 10 ~ "3c",
+                                  .default = "3c*")) %>%
+      mutate(Type = directories[i])
+    
+    if(i == 1 & j == 1){
+      constraints.df <- con_data_df_cl
+    } else{
+      constraints.df <- rbind(constraints.df, con_data_df_cl)
+    }
+    
+    #### Isolate thermal histories ----
+    ## Paths are bracketed by entries that begin with "Individual Paths"
+    ## followed by 3 lines of header
+    path_bounds <- which(str_detect(file, "^Individual paths")) #find index of bounds
+    path_data <- file[(path_bounds[1]+3):length(file)] # subset paths
+    path_data <- matrix(path_data) # convert to matrix for easier parsing
+    # each path is 2 lines
+    path_df <- data.frame(t(sapply(strsplit(path_data, '\t'), c))) # make into data frame
+    path_header <- make.names(path_df[1, ], unique = TRUE)
+    path_df <- path_df[-1, ]
+    colnames(path_df) <- path_header
+    # clean data frame
+    path_df_cl <- path_df %>%
+      mutate(across(!c("Fit", "Data"), as.numeric)) %>%
+      select(!c("Comp..GOF")) %>%
+      mutate(Info = case_when(Data == "Time (Ma)" ~ "Date.Prediction",
+                              .default = "GOF"))
+    wider <- pivot_wider(path_df_cl, id_cols = Fit, names_from = Info, values_from = GOF)
+    path_df_cl <- path_df_cl %>%
+      select(!c("GOF", "Info")) %>%
+      full_join(wider, by = "Fit") %>%
+      filter(str_detect(Fit, "Acc", negate = TRUE)) # drop all acceptable paths
+
+    path_df_temp_long <- path_df_cl %>%
+      filter(Data == "Temp (C)") %>%
+      select(!c("Data")) %>%
+      pivot_longer(!c("Fit", "Date.Prediction", "GOF"), names_to = "Constraint", values_to = "Temp")
+    
+    path_df_time_long <- path_df_cl %>%
+      filter(Data == "Time (Ma)") %>%
+      select(!c("Data")) %>%
+      pivot_longer(!c("Fit", "Date.Prediction", "GOF"), names_to = "Constraint", values_to = "Time")
+    
+    cons <- unique(path_df_time_long$Constraint)
+    keep_constraints <- cons[!cons %in% grep(paste0(c("Con1", "C1", "Con2", "C2", "Con3", "C3"), collapse = "|"), cons, value = TRUE)]
+    paths_df_long <- left_join(path_df_time_long, path_df_temp_long, by = join_by(Fit, Date.Prediction, GOF, Constraint)) %>%
+      mutate(Sample = Sample_j) %>%
+      mutate(Type = directories[i]) %>%
+      filter(Constraint %in% keep_constraints)
+    
+    if(i == 1 & j == 1){
+      paths.df <- paths_df_long
+    } else{
+      paths.df <- rbind(paths.df, paths_df_long)
+    }
+  }
+  toc()
+}
+toc()
+```
+```{save data frames as machine readable files, echo = FALSE}
+# this may not work from markdown file depending on memory, copying and pasting the save commands into a new script and running that worked
+write.xlsx(constraints.df, "/Volumes/LaCie/Jacobsville_Models_2025/HeFTy_Constraint_Summary.xlsx")
+write.csv(constraints.df, "/Volumes/LaCie/Jacobsville_Models_2025/HeFTy_Constraint_Summary.csv")
+write.xlsx(paths.df, "/Volumes/LaCie/Jacobsville_Models_2025/HeFTy_Paths_all.xlsx")
+write.csv(paths.df, "/Volumes/LaCie/Jacobsville_Models_2025/HeFTy_Paths_all.csv")
+
+```
+
+```{r load and extract less restrictive models, echo = F}
+
+
+
+### GROUPED GRAIN MODELS ----
+date.predictions <- data.frame("Hft.File" = NA, "Sample" = NA, "Path"  = NA,
+                               "Com.GOF" = NA, "Date" = NA, "GOF" = NA)
+date.predictions <- date.predictions[F, ]
+
+all.paths <- data.frame("Type" = NA, "Sample"  = NA, "Path" = NA, "Date" = NA,
+                               "Com.GOF" = NA, "GOF" = NA, "Time.Dep" = NA,
+                        "Time.Unc" = NA, "Max.Temp" = NA, "Max.Time" = NA,
+                        "Hft.File" = NA)
+all.paths <- all.paths[F, ]
+
+neo.heating.summary <- data.frame("Type" = NA, "Sample" = NA, "Mean_Date" = NA, "Mean_Com.GOF" = NA, "Max_Dep" = NA, "Min_Dep" = NA,
+                                  "Mean_Dep" = NA, "Med_Dep" = NA, "Mean_Unc" = NA,
+                                  "Max_Max" = NA, "Min_Max" = NA, "Med_Max" = NA, "Time_Max_Max" = NA, 
+                                  "Time_Min_Max" = NA, "Time_Med_Max" = NA, "Hft.File" = NA)
+neo.heating.summary <- neo.heating.summary[F, ]
+
+pre.deposition.summary <- data.frame("Type" = NA, "Sample" = NA, "Mean_Date" = NA, "Mean_Com.GOF" = NA, "Mean_Dep" = NA, "First_PRZ_Cool_Time" = NA,
+                                     "Last_PRZ_Cool_Time" = NA, "Med_PRZ_Cool_Time" = NA, "First_20_Cool_Time" = NA, 
+                                     "Last_20_Cool_Time" = NA, "Med_20_Cool_Time" = NA, "First_PRZ_Cool_Temp" = NA,
+                                     "Last_PRZ_Cool_Temp" = NA, "Med_PRZ_Cool_Temp" = NA, "First_20_Cool_Temp" = NA, 
+                                     "Last_20_Cool_Temp" = NA, "Med_20_Cool_Temp" = NA, "Hft.File" = NA)
+pre.deposition.summary <- pre.deposition.summary[F, ]
+
+
+
+### GROUPED GRAIN MODELS ----
+#i = 14
+tictoc::tic()
+for(i in 1:length(files)){
+#for(i in 17:17){ # testing single file
+  file.name <- paste(path.name, files[i], sep = "/")
+  hft.file <- strsplit(files[i], "-inv-")[[1]][1]
+  #sample <- sub(".txt", "", strsplit(files[i], "-inv-")[[1]][2]])
+  
+  
+  file <- read_lines(file.name) # import using file path
+  
+  #### Isolate Paths ----
+  ## Paths are bracketed by entries that begin with "Individual Paths"
+  ## followed by 3 lines of header
+  
+  path_bounds <- which(str_detect(file, "^Individual paths")) #find index of bounds
+  path_data <- file[(path_bounds[1]+4):length(file)] # subset paths
+  path_data <- matrix(path_data) # convert to matrix for easier parsing
+  # each path is 2 lines
+  path_data_parse <- data.frame(t(sapply(strsplit(path_data, '\t'), c))) # make into data frame
+  path_data_parse$X2[1] <- "0" # fill first path value with 0 as in the others
+  path_data_parse <- path_data_parse %>% # remove empty columns at end of data frame
+    mutate_all(~ na_if(.,"")) %>%
+    select(!where(~ all(is.na(.x))))
+  header <- strsplit(file[(path_bounds[1]+3)], '\t')[[1]]
+  samples <- strsplit(file[(path_bounds[1]+1)], '\t')[[1]]
+  samples <- samples[-c(1,2)]
+  samples <- sub("^([^_]*_[^_]*).*", "\\1", samples)
+  
+  #### Subset longform data ----
+  row_odd <- seq_len(nrow(path_data_parse)) %% 2 # create odd and even row index
+  time.rows <- path_data_parse[row_odd == 1, ] # extract odd rows which contain time steps, bin predictions
+  temp.rows <- path_data_parse[row_odd == 0, ] # extract even rows which contain temp steps, GOF
+  num_path <- nrow(time.rows) # total number of paths
+  num_dates <- sum(str_detect(sapply(strsplit(file[(path_bounds[1]+3)], '\t'), c), "^GOF"), na.rm = TRUE) # find the number of modeled dates
+  temp.rows$X2 <- as.numeric(temp.rows$X2)
+  time.rows$v1 <- rep("", num_path)
+  time.rows$minGOF <- rep("", num_path) # isolate minimum GOF value
+  temp.rows$v2 <- rep("", num_path)
+  
+  ## pivot longer to put in plotting format
+  path.start <- which(time.rows[1, ] == "Time (Ma)", arr.ind = TRUE)[2] #find start of path time/temp steps
+  piv <- names(time.rows[ , (path.start + 1):(ncol(time.rows)-2)]) # column names to pivot
+  time.long <- time.rows %>% pivot_longer(cols = all_of(piv), values_to = "Time") # all_of() silences the warning message 
+  temp.long <- temp.rows %>% pivot_longer(cols = all_of(piv), values_to = "Temp")
+  
+  ## create columns headers 
+  time.header <- c("Path", "Delete") # "Delete" is an empty column retained from the original HeFTy file
+  temp.header <- c("Path1", "Com.GOF") # "Path1" is a duplicate of "Path" and will be deleted when combined
+  for (j in 1:num_dates){
+    time.header <- c(time.header, paste("Date", samples[j], sep = ".")) # save preds.df column names for later use
+    temp.header <- c(temp.header, paste("GOF", samples[j], sep = ".")) # save paths.df column names for later use
+  }
+  time.header <- c(time.header, "Delete2", "v1","minGOF","name1", "Time") # "Delete" columns are duplicates between the two vectors
+  temp.header <- c(temp.header, "Delete3", "v2","name2", "Temp")
+  colnames(time.long) <- time.header
+  colnames(temp.long) <- temp.header
+  
+  ## combine time and temp dataframes to create one dataframe with all information for plotting
+  com.paths <- cbind(time.long,temp.long)
+  com.paths.clean = subset(com.paths, select = -c(Delete, Delete2, Delete3, name1, name2, Path1))
+  #paths.df.1 <- com.paths.clean %>% select(Path, Time, Temp, Date.1, Com.GOF)
+  paths.df.1 <- com.paths.clean %>% select(!c(v1, minGOF, v2))
+  paths.df <- paths.df.1 %>% mutate(across(!c("Path"), as.numeric)) # convert numeric values
+  paths.df <- paths.df %>% # remove paths that go back in time (not allowed)
+    group_by(Path) %>% # group by path name
+    mutate(Invalid = case_when(lead(Time, n = 1) - Time > 0 ~ NA,
+                               .default = 1)) %>% # check for paths that go back in time
+    mutate(Remove = case_when(any(is.na(Invalid)) == T ~ NA,
+                              .default = 1)) %>%
+    drop_na(Remove)
+
+  # isolate and save best and worst fit paths for inputting into HeFTy
+  best <- paths.df %>%
+    filter(Path == "Best")
+  # write.table(best[, 2:3], file = paste(path.name, paste(sample, mod.type, "bf.txt", sep = "-"), sep = "/"), sep = "\t", 
+  #             row.names = F, col.names = F)
+  worst <- paths.df[which(paths.df$Com.GOF == min(paths.df$Com.GOF)), ]
+  while(length(unique(worst$Path)) > 1){
+    worst <- worst %>%
+      filter(Path == worst$Path[1])
+  }
+  # write.table(worst[, 2:3], file = paste(path.name, paste(sample, mod.type, "wf.txt", sep = "-"), sep = "/"), sep = "\t", 
+  #             row.names = F, col.names = F)
+  
+  keep <- rbind(best, worst) %>%
+    mutate(#Sample = sample,
+           Hft.File = hft.file) %>%
+    select(!c("Time", "Temp")) %>%
+    unique() %>%
+    mutate(Path = case_when(Path == "Best" ~ "Best",
+                            .default = "Worst")) #%>%
+  
+  names <- colnames(keep)
+  keep <- keep %>%
+    pivot_longer(cols = names[c(which(str_starts(colnames(keep), "Date")), which(str_starts(colnames(keep), "GOF")))], 
+                 names_to = "Sample", values_to = "Prediction") %>%
+    mutate(Type.Prediction = case_when(str_detect(Sample, "GOF") ~ "GOF",
+                                       .default = "Date")) %>%
+    mutate(Sample = sub("Date.", "", Sample)) %>%
+    mutate(Sample = sub("GOF.", "", Sample)) %>%
+    pivot_wider(id_cols = c(Path, Com.GOF, Hft.File, Sample), values_from = Prediction, names_from = Type.Prediction)
+
+    
+  
+  date.predictions <- rbind(date.predictions, keep[ , c(3, 4, 1, 2, 5, 6)]) # add to saved data frame
+  
+  ### find max and min temps in Neoproterozoic burial
+  
+  deposition.box <- paths.df %>%
+    filter(between(Time, 949.7, 993.15)) %>%
+    mutate(Type = case_when(str_detect(Path, "Acc") == T ~ "Acceptable",
+                            .default = "Good"))
+  
+  deposition.min <- deposition.box %>%
+    group_by(Type, Path) %>%
+    filter(Temp == min(Temp)) %>%
+    ungroup() %>%
+    rename("Time.Dep" = "Time", "Temp.Dep" = "Temp") %>%
+    select(Path, Time.Dep)
+  
+  unconformity.box <- paths.df %>%
+    filter(between(Time, 483, 497)) %>% # larger than actual constraint box to keep max number paths
+    mutate(Type = case_when(str_detect(Path, "Acc") == T ~ "Acceptable",
+                            .default = "Good"))
+  
+  unconformity.min <- unconformity.box %>%
+    group_by(Type, Path) %>%
+    filter(Temp == min(Temp)) %>%
+    ungroup() %>%
+    rename("Time.Unc" = "Time", "Temp.Unc" = "Temp") %>%
+    select(Path, Time.Unc)
+  
+  ### add pivot for predicted dates and GOF here
+  neo.path.seg <- full_join(paths.df, deposition.min, by = "Path") %>%
+    full_join(unconformity.min, by = "Path") %>%
+    mutate(Type = case_when(str_detect(Path, "Acc") == T ~ "Acceptable",
+                            .default = "Good")) %>%
+    group_by(Type, Path) %>%
+    filter(between(Time, Time.Unc, Time.Dep))
+  
+  neo.names <- colnames(neo.path.seg)
+  neo.path.seg <- neo.path.seg %>%
+    pivot_longer(cols = neo.names[c(which(str_starts(colnames(neo.path.seg), "Date")), which(str_starts(colnames(neo.path.seg), "GOF")))], 
+                 names_to = "Sample", values_to = "Prediction") %>%
+    mutate(Type.Prediction = case_when(str_detect(Sample, "GOF") ~ "GOF",
+                                       .default = "Date")) %>%
+    mutate(Sample = sub("Date.", "", Sample)) %>%
+    mutate(Sample = sub("GOF.", "", Sample)) %>%
+    pivot_wider(values_from = Prediction, names_from = Type.Prediction) %>%
+    group_by(Sample, .add = T)
+  
+  each_path <- neo.path.seg %>%
+    ungroup() %>%
+    group_by(Sample, Path) %>%
+    summarize(Type = unique(Type), Sample = unique(Sample), Path = unique(Path), Date = unique(Date), Com.GOF = unique(Com.GOF), GOF = unique(GOF), Time.Dep = unique(Time.Dep),
+              Time.Unc = unique(Time.Unc), Max.Temp = max(Temp),
+              Max.Time = Time[which(Temp == max(Temp))], .groups = "keep") %>%
+    mutate(Hft.File = hft.file)
+  
+  all.paths <- rbind(all.paths, each_path)
+  
+  all_paths <- each_path %>%
+    ungroup() %>%
+    group_by(Type, Sample) %>%
+    summarize(Type = unique(Type), Sample = unique(Sample), Mean_Date = mean(Date), Mean_Com.GOF = mean(Com.GOF), Max_Dep = max(Time.Dep), Min_Dep = min(Time.Dep),
+              Mean_Dep = mean(Time.Dep), Med_Dep = median(Time.Dep), Mean_Unc = mean(Time.Unc),
+              Max_Max = max(Max.Temp), Min_Max = min(Max.Temp), Med_Max = median(Max.Temp), 
+              Time_Max_Max = max(Max.Time), Time_Min_Max = min(Max.Time), Time_Med_Max = median(Max.Time),
+              .groups = "keep") %>%
+    mutate(Hft.File = hft.file)
+  
+  neo.heating.summary <- rbind(neo.heating.summary, all_paths)
+  
+  ### pre-deposition summary of when samples cool below PRZ and 20°C
+  cool.box <- paths.df %>%
+    filter(Time >= 949.7) %>%
+    mutate(Type = case_when(str_detect(Path, "Acc") == T ~ "Acceptable",
+                            .default = "Good"))
+  PRZ <- cool.box %>%
+    group_by(Type, Path) %>%
+    filter(Temp <= 140) %>%
+    filter(Time == max(Time)) %>%
+    ungroup() %>%
+    rename("Time.PRZ" = "Time", "Temp.PRZ" = "Temp") %>%
+    select(Path, Time.PRZ, Temp.PRZ)
+  
+  surface <- cool.box %>%
+    group_by(Type, Path) %>%
+    filter(Temp <= 20) %>%
+    filter(Time == max(Time)) %>%
+    ungroup() %>%
+    rename("Time.20" = "Time", "Temp.20" = "Temp") %>%
+    select(Path, Time.20, Temp.20)
+  
+  
+  pre.paths <- full_join(PRZ, surface, by = "Path") %>%
+    full_join(deposition.min, by = "Path") %>%
+    full_join(paths.df, by = "Path") %>%
+    mutate(Type = case_when(str_detect(Path, "Acc") == T ~ "Acceptable",
+                            .default = "Good")) %>%
+    group_by(Type, Path)
+  
+  pre.names <- colnames(pre.paths)
+  pre.paths <- pre.paths %>%
+    pivot_longer(cols = pre.names[c(which(str_starts(colnames(pre.paths), "Date")), which(str_starts(colnames(pre.paths), "GOF")))], 
+                 names_to = "Sample", values_to = "Prediction") %>%
+    mutate(Type.Prediction = case_when(str_detect(Sample, "GOF") ~ "GOF",
+                                       .default = "Date")) %>%
+    mutate(Sample = sub("Date.", "", Sample)) %>%
+    mutate(Sample = sub("GOF.", "", Sample)) %>%
+    pivot_wider(values_from = Prediction, names_from = Type.Prediction) %>%
+    group_by(Sample, .add = T)
+  
+  each_pre_path <- pre.paths %>%
+    summarize(Type = unique(Type), Sample = unique(Sample), Date = unique(Date), Com.GOF = unique(Com.GOF), Time.Dep = unique(Time.Dep),
+              Time.PRZ = unique(Time.PRZ), Temp.PRZ = unique(Temp.PRZ), Time.20 = unique(Time.20),
+              Temp.20 = unique(Temp.20), .groups = "keep") %>%
+    mutate(Hft.File = hft.file)
+  
+  all_pre_paths <- each_pre_path %>%
+    ungroup() %>%
+    group_by(Type, Sample) %>%
+    summarize(Type = unique(Type), Sample = unique(Sample), Mean_Date = mean(Date), 
+              Mean_Com.GOF = mean(Com.GOF), Mean_Dep = mean(Time.Dep), 
+              First_PRZ_Cool_Time = max(Time.PRZ), Last_PRZ_Cool_Time = min(Time.PRZ), 
+              Med_PRZ_Cool_Time = median(Time.PRZ), First_20_Cool_Time = max(Time.20), 
+              Last_20_Cool_Time = min(Time.20), Med_20_Cool_Time = median(Time.20),
+              First_PRZ_Cool_Temp = max(Temp.PRZ), Last_PRZ_Cool_Temp = min(Temp.PRZ), 
+              Med_PRZ_Cool_Temp = median(Temp.PRZ), First_20_Cool_Temp = max(Temp.20), 
+              Last_20_Cool_Temp = min(Temp.20), Med_20_Cool_Temp = median(Temp.20),
+              .groups = "keep") %>%
+    mutate(Hft.File = hft.file)
+  pre.deposition.summary <- rbind(pre.deposition.summary, all_pre_paths)
+  print(paste(i, samples, sep = " "))
+}
+tictoc::toc()
+```
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
