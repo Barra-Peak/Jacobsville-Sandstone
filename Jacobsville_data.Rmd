@@ -24,22 +24,22 @@ This markdown document collates all U-Pb and (U-Th)/He reduced data, cleans the 
 
 ```{r import data files, echo = F}
 # load U-Pb data from run 1
-upb_data_1 <- read.xlsx("/Users/barrapeak/Dropbox/Thermo-Detrital/Data/U_Pb_all_2024_06_17.xlsx", "Data_1", startRow = 1, fillMergedCells = T, check.names = T) %>% 
+upb_data_1 <- read.xlsx("/Users/barrapeak/Dropbox/Code/GitHub/Jacobsville-Sandstone/U_Pb_all_2024_06_17.xlsx", "Data_1", startRow = 1, fillMergedCells = T, check.names = T) %>% 
   mutate(Run = "1") %>%
   drop_na(Final.Pb207.U235_mean)
 # load U-Pb data from run 2
-upb_data_2 <- read.xlsx("/Users/barrapeak/Dropbox/Thermo-Detrital/Data/U_Pb_all_2024_06_17.xlsx", "Data_2", startRow = 1, fillMergedCells = T, check.names = T) %>% 
+upb_data_2 <- read.xlsx("/Users/barrapeak/Dropbox/Code/GitHub/Jacobsville-Sandstone/U_Pb_all_2024_06_17.xlsx", "Data_2", startRow = 1, fillMergedCells = T, check.names = T) %>% 
   mutate(Run = "2") %>%
   drop_na(Final.Pb207.U235_mean)
 # load U-Pb data from run 3
-upb_data_3 <- read.xlsx("/Users/barrapeak/Dropbox/Thermo-Detrital/Data/U_Pb_all_2024_06_17.xlsx", "Data_3", startRow = 1, fillMergedCells = T, check.names = T) %>% 
+upb_data_3 <- read.xlsx("/Users/barrapeak/Dropbox/Code/GitHub/Jacobsville-Sandstone/U_Pb_all_2024_06_17.xlsx", "Data_3", startRow = 1, fillMergedCells = T, check.names = T) %>% 
   mutate(Run = "3") %>%
   drop_na(Final.Pb207.U235_mean)
 
 # load helium analytical data
-he_input_data <- read.xlsx("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Data/2026_01_21_all_he_values.xlsx", startRow = 1, colNames = TRUE, check.names = TRUE, sep.names = "_") # load data using full file path. this file is just input and measured data, no dates
+he_input_data <- read.xlsx("/Users/barrapeak/Dropbox/Code/GitHub/Jacobsville-Sandstone/2026_01_21_all_he_values.xlsx", startRow = 1, colNames = TRUE, check.names = TRUE, sep.names = "_") # load data using full file path. this file is just input and measured data, no dates
 
-he_nmol <- read.xlsx("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Data/2026_01_21_hecalc_GEOM_input.xlsx", startRow = 1, colNames = TRUE, check.names = TRUE, sep.names = ".") # load hecalc input values for date calculation
+he_nmol <- read.xlsx("/Users/barrapeak/Dropbox/Code/GitHub/Jacobsville-Sandstone/2026_01_21_hecalc_GEOM_input.xlsx", startRow = 1, colNames = TRUE, check.names = TRUE, sep.names = ".") # load hecalc input values for date calculation
 
 ```
 
@@ -206,24 +206,24 @@ inheritance_ft <- full_join(date_inheritance_data, gz_inheritance_data) %>%
   filter(fmol.4He > X.) # remove columns with He uncertainty higher than He
 colnames(inheritance_ft) = hecalc_header
 
-write.xlsx(inheritance_ft, paste("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Data/", "inh_FT_hecalc_input.xlsx", sep = ""))
+write.xlsx(inheritance_ft, paste("/Users/barrapeak/Dropbox/Code/GitHub/Jacobsville-Sandstone", "inh_FT_hecalc_input.xlsx", sep = ""))
 ```
 ```{r load HeCalc date outputs}
-all_FT_dates <- read.xlsx("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Data/2026_01_21_hecalc_GEOM_output.xlsx", startRow = 3, colNames = TRUE, check.names = TRUE, sep.names = "_") %>%
+all_FT_dates <- read.xlsx("/Users/barrapeak/Dropbox/Code/GitHub/Jacobsville-Sandstone/Data/2026_01_21_hecalc_GEOM_output.xlsx", startRow = 3, colNames = TRUE, check.names = TRUE, sep.names = "_") %>%
   select(!starts_with("M")) %>%
   select(!starts_with("N"))
 colnames(all_FT_dates) <- paste(colnames(all_FT_dates),"all_FT", sep = "_")
 all_FT_dates <- all_FT_dates %>%
   rename("Grain" ="Sample_all_FT")
 
-all_FT_analytical <- read.xlsx("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Data/2026_01_21_hecalc_Analytical_output.xlsx", startRow = 3, colNames = TRUE, check.names = TRUE, sep.names = "_") %>%
+all_FT_analytical <- read.xlsx("/Users/barrapeak/Dropbox/Code/GitHub/Jacobsville-Sandstone/2026_01_21_hecalc_Analytical_output.xlsx", startRow = 3, colNames = TRUE, check.names = TRUE, sep.names = "_") %>%
   select(!starts_with("M")) %>%
   select(!starts_with("N"))
 colnames(all_FT_analytical) <- paste(colnames(all_FT_analytical),"all_analytical", sep = "_")
 all_FT_analytical <- all_FT_analytical %>%
   rename("Grain" ="Sample_all_analytical")
 
-inh_dates <- read.xlsx("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Data/inh_FT_hecalc_output.xlsx", startRow = 3, colNames = TRUE, check.names = TRUE, sep.names = "_") %>%
+inh_dates <- read.xlsx("/Users/barrapeak/Dropbox/Code/GitHub/Jacobsville-Sandstone/inh_FT_hecalc_output.xlsx", startRow = 3, colNames = TRUE, check.names = TRUE, sep.names = "_") %>%
   select(!starts_with("M")) %>%
   select(!starts_with("N"))
 colnames(inh_dates) <- paste(colnames(inh_dates), "inh_FT", sep = "_")
@@ -424,13 +424,13 @@ colnames(he_print) <- c("Runab", "Sample", "Grainc", "Length 1d", "Width 1e",
 ```
 ```{r write and save tables as xlsx}
 # human reader file add sheets ---
-write.xlsx(print_upb, "/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/data_tables_S1.xlsx", sheetName = "Table S1. U-Pb Data")
-write.xlsx(he_print, "/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/data_tables_S4_2026_01_21.xlsx", sheetName = "Sheet1")
+write.xlsx(print_upb, "/Users/barrapeak/Dropbox/Code/GitHub/Jacobsville-Sandstone/data_tables_S1.xlsx", sheetName = "Table S1. U-Pb Data")
+write.xlsx(he_print, "/Users/barrapeak/Dropbox/Code/GitHub/Jacobsville-Sandstone/data_tables_S4_2026_01_21.xlsx", sheetName = "Sheet1")
 
 # repository file add sheets ----
-write.xlsx(repository_upb, "/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/repository_data_tables.xlsx",
+write.xlsx(repository_upb, "/Users/barrapeak/Dropbox/Code/GitHub/Jacobsville-Sandstone/repository_data_tables.xlsx",
            sheetName = "U.Pb.Data")
-repo <- loadWorkbook("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/repository_data_tables.xlsx")
+repo <- loadWorkbook("/Users/barrapeak/Dropbox/Code/GitHub/Jacobsville-Sandstone/repository_data_tables.xlsx")
 addWorksheet(repo, "U.Pb.Data.Reporting")
 writeData(repo, "U.Pb.Data.Reporting", upb_footnotes)
 addWorksheet(repo, "U.Th.He.Data")
@@ -439,7 +439,7 @@ addWorksheet(repo, "U.Th.He.Units")
 writeData(repo, "U.Th.He.Units", he_units)
 addWorksheet(repo, "U.Th.He.Explanation")
 writeData(repo, "U.Th.He.Explanation", he_footer)
-saveWorkbook(repo, "/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/repository_data_tables.xlsx", overwrite = T)
+saveWorkbook(repo, "/Users/barrapeak/Dropbox/Code/GitHub/Jacobsville-Sandstone/repository_data_tables.xlsx", overwrite = T)
 
 
 
