@@ -14,13 +14,11 @@ library(stringr) # for easier character data handling
 library(tibble) # for easier datatable rearranging
 ```
 
-## R Markdown Description
+## Data cleaning
 
 This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document.
-
-This markdown document collates all U-Pb and (U-Th)/He reduced data, cleans the data, and packages it in data tables for reading by humans and to be used in data visualization.
+This file imports and cleans individual data files from Iolite and HeCalc for data visualization and analysis.
 
 ```{r import data files, echo = F}
 # load U-Pb data from run 1
