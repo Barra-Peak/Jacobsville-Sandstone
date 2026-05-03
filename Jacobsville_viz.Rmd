@@ -18,15 +18,15 @@ library(forcats) # data handling
 library(ggnewscale) # adding color scales to ggplot
 ```
 
-## R Markdown
+## Data visualization
 
 This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+This file creates the base plots and graphs used to construct figures in Adobe Illustrator.
 
 ```{r load clean u-pb and he data}
-upb_data <- read.xlsx("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/repository_data_tables.xlsx", "U.Pb.Data", startRow = 1, fillMergedCells = T, check.names = T)
-he_data <- read.xlsx("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/repository_data_tables.xlsx", "U.Th.He.Data", startRow = 1, fillMergedCells = T, check.names = T)
+upb_data <- read.xlsx("/Users/barrapeak/Dropbox/Code/GitHub/Jacobsville-Sandstone/repository_data_tables.xlsx", "U.Pb.Data", startRow = 1, fillMergedCells = T, check.names = T)
+he_data <- read.xlsx("/Users/barrapeak/Dropbox/Code/GitHub/Jacobsville-Sandstone/repository_data_tables.xlsx", "U.Th.He.Data", startRow = 1, fillMergedCells = T, check.names = T)
 ```
 ```{r load and clean Malone 2016 U-Pb data, echo = F}
 malone_data <- drop_na(read.csv("/Users/barrapeak/Dropbox/Thermo-Detrital/Data/Malone_data.csv"))
@@ -140,7 +140,7 @@ p.density.c <-
   geom_density(data = malone_data_comp, aes(x = X206Pb..207Pb..age), bw = binwidth, fill = "transparent", linetype = "dashed", alpha = 0.6, adjust = 2) +   # kernal density
   geom_rug(data = all_data, aes(x = Pb207.Pb206_Date), alpha = 0.4, outside = FALSE, color = "black") +
   geom_rug(data = malone_data_comp, aes(x = X206Pb..207Pb..age), alpha = 0.4, sides = "b", outside = TRUE, color = "blue") +
-   geom_density(data = all_data, aes(x = Pb207.Pb206_Date), bw = binwidth, fill = "black", alpha = 0.6, adjust = 2) +
+   geom_density(data = all_data, aes(x = Pb207.Pb206_Date), bw = binwidth, fill = "transparent", adjust = 2) +
   coord_cartesian(clip = "off") +
   xlim(500, 3000) +
   xlab("207Pb/206Pb Date (Ma)") +
@@ -153,26 +153,20 @@ p.density.c <-
   annotate("text", x = 2700, y = 0.0002, label = paste(signif(peak3[1], 3)), colour = "black") +
   annotate("text", x = 2000, y = 0.0026, label = "U/Pb Malone et al. (2020)", colour =  "gray", hjust = 0) +
   annotate("text", x = 2000, y = 0.0024, label = paste("n =", nrow(malone_data_comp)), colour =  "gray", hjust = 0) +
-  #annotate("text", x = 350, y = 0.00175, label = paste("Kernel Binwidth =", round(malone_density$bw,2)), colour = "blue") +
-  # annotate("text", x=1422+150, y = 0.003, label = paste(signif(peak1m[1], 2)), colour = "blue") +
-  # annotate("text", x  = 1887, y = 0.00075, label = paste(signif(peak2m[1], 2)), colour = "blue") +
-  # annotate("text", x = 2717, y = 0.00002, label = paste(signif(peak3m[1], 2)), colour = "blue") +
-  
-  #scale_y_continuous(sec.axis = sec_axis(~.*yas, name="Kernal Density")) +
-  #ggtitle(paste("Bin size =", as.character(bw), sep = " ")) +
   theme_bw() +
   theme(
     plot.title = element_text(size=12),
     axis.text = element_text(size = 9),
     axis.title = element_text(size = 11))
 p.density.c
-ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R.Fig.1_UPb.pdf", plot = p.density.c, width = 6.5, height = 2)
+#ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R.Fig.1_UPb.pdf", plot = p.density.c, width = 6.5, height = 2)
 ```
 ```{r U-Pb K-S test}
 ks <- ks.test(x = all_data$Pb207.Pb206_Date, y = malone_data_comp$X206Pb..207Pb..age, alternative = "two.sided")
 print(ks$p.value)
 ```
 ```{r cumulative density function plot, echo = F}
+# not used in final figure
 upb_ts <- all_data %>%
   select(Pb207.Pb206_Date) %>%
   mutate(Source = "This Study")
@@ -204,15 +198,12 @@ upb_cdf <- upb_cdf_data %>%
                alpha = .3, fill = "#225555") + # Mazatzal, from west
   annotate("rect", xmin = 1820, xmax = 1880, ymin = -Inf, ymax = Inf,
                alpha = .3, fill = "#225555") + # Penokean from S and E
-  # annotate("rect", xmin = 1800, xmax = 2000, ymin = -Inf, ymax = Inf,
-  #              alpha = .1, fill = "green") + # Trans Hudson Orogen from west or recycled
   annotate("rect", xmin = 2700, xmax = 3000, ymin = -Inf, ymax = Inf,
                alpha = .3, fill = "#225555") + # Superior Province from N
   stat_ecdf() +
   coord_cartesian(clip = "off") +
   xlim(500, 3000) +
   xlab("207Pb/206Pb Date (Ma)") +
-  #scale_x_continuous(name = "207Pb/206Pb Date (Ma)", breaks = seq(1000, 3000, 500)) +
   scale_color_manual(values = c("This Study" = "black", "Malone et al. (2020)" = "gray")) +
   scale_y_continuous(name = "Cumulative Distribution Function", labels = scales::label_number(accuracy = 0.001)) +
   annotate("text", x = 2000, y = 0.2, label = paste("K-S p-value =", signif(ks$p.value, 2)), colour =  "black", hjust = 0) +
@@ -225,18 +216,6 @@ upb_cdf <- upb_cdf_data %>%
     plot.title = element_text(size=12),
     axis.text = element_text(size = 9),
     axis.title = element_text(size = 11))
-  # theme(panel.background = element_rect(fill = "transparent", colour = "transparent", linewidth = 0.75),
-  #       panel.border = element_rect(fill = NA, color = "black", linewidth = 0.75),
-  #       axis.ticks = element_line(colour = "black", linewidth = 0.5),
-  #       axis.ticks.length = unit(-0.2,"cm"),
-  #       axis.text = element_text(size = 9),
-  #       axis.title = element_text(size = 11),
-  #       plot.margin = grid::unit(c(0,0,0,0), "mm"),
-  #       legend.background = element_rect(fill = NA, colour = NA),
-  #       legend.key = element_blank(),
-  #       legend.position = c(0.85,0.75),
-  #       legend.text = element_text(size = 9),
-  #       legend.title = element_text(size = 11))
 upb_cdf
 
 #ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R.Fig.S1A.pdf", plot = upb_cdf, width = 6.5, height = 3)
@@ -312,7 +291,7 @@ ZHe_eU <- ZHe_plot_data %>%
   facet_wrap(vars(Age_Group), nrow = 3)
 
 ZHe_eU
-ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Fig.S2eU_2026_01_21.pdf", plot = ZHe_eU, width = 3.75, height = 5.5)
+#ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Fig.S2eU_2026_01_21.pdf", plot = ZHe_eU, width = 3.75, height = 5.5)
 ```
 ```{r ZHe vs. alpha plot, echo = FALSE}
 ZHe_alpha <- ZHe_plot_data %>%
@@ -345,7 +324,7 @@ ZHe_alpha <- ZHe_plot_data %>%
   facet_wrap(vars(Age_Group), nrow = 3)
 
 ZHe_alpha
-ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Fig.S2alpha_2026_01_21.pdf", plot = ZHe_alpha, width = 3.75, height = 5.5)
+#ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Fig.S2alpha_2026_01_21.pdf", plot = ZHe_alpha, width = 3.75, height = 5.5)
 ```
 ```{r ZHe vs. RFT, echo = FALSE}
 ZHe_RFT <- ZHe_plot_data %>%
@@ -380,7 +359,7 @@ ZHe_RFT <- ZHe_plot_data %>%
 
 ZHe_RFT
 
-ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Fig.S2RFT_2026_01_21.pdf", plot = ZHe_RFT, width = 3.75, height = 5.5)
+#ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Fig.S2RFT_2026_01_21.pdf", plot = ZHe_RFT, width = 3.75, height = 5.5)
 ```
 
 ```{r ZHe vs. UPb plot Main Paper, echo = FALSE}
@@ -441,22 +420,11 @@ ZHe_UPb <- ZHe_plot_data %>%
   geom_hline(yintercept = 992.51, linewidth = 0.5, color = "#437DBF") +
   annotate("rect", ymax = Inf, ymin = - Inf, xmin = 985.5-35.8, xmax = 992.51 + 0.64, fill = "#437DBF", alpha = 0.4) +
   geom_vline(xintercept = 992.51, linewidth = 0.5, color = "#437DBF") +
-  # annotate("rect", xmin = -Inf, xmax = Inf, ymin = 980, ymax = 1250,
-  #              alpha = .1, fill = "orange") + 
-  # annotate("rect", xmin = 980, xmax = 1250, ymin = -Inf, ymax = Inf,
-  #              alpha = .1, fill = "orange") +
-  # annotate("rect", xmin = -Inf, xmax = Inf, ymin = 1350, ymax = 1500,
-  #              alpha = .1, fill = "pink") + 
-  # annotate("rect", xmin = 1350, xmax = 1500, ymin = -Inf, ymax = Inf,
-  #              alpha = .1, fill = "pink") +
   geom_abline(slope = 1,  linewidth = 0.5, color = "black", linetype = "dashed") +
   geom_errorbar(lineend = "square", orientation = "x") +
   geom_errorbar(lineend = "square", orientation = "y") +
   geom_point(size = 2) +
-  #scale_color_viridis(option = "C", transform = "log", limits = c(10, 2000), breaks = c(10, 100, 1000), name = "eU (ppm)") +
-  #scale_color_viridis(trans = "log", limits = c(5, 780), name = "Max Alpha Dose (a/g x 10^16)") +
   scale_color_viridis(trans = "log", option = color_scale, limits = color_limits, breaks = color_breaks, name = "Max Alpha\nDose\n(x1016 a/g)") +
-   #scale_color_viridis(option = color_scale, limits = c(0, 800), breaks = seq(0, 800, 100)) +
   scale_shape_manual(values = c("None" = 15, "Conventional" = 16), name = "FT Applied") +
   scale_alpha_manual(values = c("transparent" = 0.4, "opaque" = 1), guide = "none") +
   scale_x_continuous(name = "207Pb/206Pb Date (Ma)", limits=c(0, 3500), breaks = seq(0, 3000, 500)) +
@@ -475,7 +443,7 @@ ZHe_UPb <- ZHe_plot_data %>%
         legend.position = "none")
 
 ZHe_UPb
-ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Fig.3_2026_01_21.pdf", plot = ZHe_UPb, width = 4, height = 4)
+#ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Fig.3_2026_01_21.pdf", plot = ZHe_UPb, width = 4, height = 4)
 ```
 ```{r density plots for Fig 3, echo = F}
 upb.density.3 <- 
@@ -495,7 +463,7 @@ upb.density.3
 
 zhe.density.3 <- ZHe_plot_data %>%
   ggplot() +
-   geom_density(aes(x = ZHe.Report), bw = binwidth, fill = "black", alpha = 0.6, adjust = 2) +
+   geom_density(aes(x = ZHe.Report), bw = binwidth, fill = "transparent", alpha = 0.6, adjust = 2) +
   coord_cartesian(clip = "off") +
   xlim(0, 2000) +
   xlab("ZHe Date (Ma)") +
@@ -506,7 +474,7 @@ zhe.density.3 <- ZHe_plot_data %>%
     axis.text = element_text(size = 9),
     axis.title = element_text(size = 11))
 zhe.density.3
-ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Fig.3zhe.pdf", plot = zhe.density.3, width = 4, height = 2)
+#ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Fig.3zhe.pdf", plot = zhe.density.3, width = 4, height = 2)
 ```
 
 ```{r ZHe vs. UPb plot Ft consideration, echo = FALSE}
@@ -532,8 +500,6 @@ ZHe_UPb_FT <- ZHe_plot_data %>%
                alpha = .3, fill = "#225555") + # Mazatzal, from west
   annotate("rect", xmin = 1820, xmax = 1880, ymin = -Inf, ymax = Inf,
                alpha = .3, fill = "#225555") + # Penokean from S and E
-  # annotate("rect", xmin = 1800, xmax = 2000, ymin = -Inf, ymax = Inf,
-  #              alpha = .1, fill = "green") + # Trans Hudson Orogen from west or recycled
   annotate("rect", xmin = 2700, xmax = 3000, ymin = -Inf, ymax = Inf,
                alpha = .3, fill = "#225555") + # Superior Province from N
   # y axis
@@ -557,30 +523,17 @@ ZHe_UPb_FT <- ZHe_plot_data %>%
                alpha = .3, fill = "#225555") + # Mazatzal, from west
   annotate("rect", ymin = 1820, ymax = 1880, xmin = -Inf, xmax = Inf,
                alpha = .3, fill = "#225555") + # Penokean from S and E
-  # annotate("rect", ymin = 1800, ymax = 2000, xmin = -Inf, xmax = Inf,
-  #              alpha = .1, fill = "green") + # Trans Hudson Orogen from west or recycled
   annotate("rect", ymin = 2700, ymax = 3000, xmin = -Inf, xmax = Inf,
                alpha = .3, fill = "#225555") + # Superior
   annotate("rect", xmax = Inf, xmin = - Inf, ymin = 985.5-35.8, ymax = 992.51 + 0.64, fill = "#437DBF", alpha = 0.4) +
   geom_hline(yintercept = 992.51, linewidth = 0.5, color = "#437DBF") +
   annotate("rect", ymax = Inf, ymin = - Inf, xmin = 985.5-35.8, xmax = 992.51 + 0.64, fill = "#437DBF", alpha = 0.4) +
   geom_vline(xintercept = 992.51, linewidth = 0.5, color = "#437DBF") +
-  # annotate("rect", xmin = -Inf, xmax = Inf, ymin = 980, ymax = 1250,
-  #              alpha = .1, fill = "orange") + 
-  # annotate("rect", xmin = 980, xmax = 1250, ymin = -Inf, ymax = Inf,
-  #              alpha = .1, fill = "orange") +
-  # annotate("rect", xmin = -Inf, xmax = Inf, ymin = 1350, ymax = 1500,
-  #              alpha = .1, fill = "pink") + 
-  # annotate("rect", xmin = 1350, xmax = 1500, ymin = -Inf, ymax = Inf,
-  #              alpha = .1, fill = "pink") +
   geom_abline(slope = 1,  linewidth = 0.5, color = "black", linetype = "dashed") +
   geom_errorbar(lineend = "square", orientation = "x") +
   geom_errorbar(lineend = "square", orientation = "y") +
   geom_point(size = 2) +
-  #scale_color_viridis(option = "C", transform = "log", limits = c(10, 2000), breaks = c(10, 100, 1000), name = "eU (ppm)") +
-  #scale_color_viridis(trans = "log", limits = c(5, 780), name = "Max Alpha Dose (a/g x 10^16)") +
   scale_color_viridis(trans = "log", option = color_scale, limits = color_limits, breaks = color_breaks) +
-   #scale_color_viridis(option = color_scale, limits = c(0, 800), breaks = seq(0, 800, 100)) +
   scale_shape_manual(values = c("None" = 15, "Conventional" = 16, "Since Deposition Only" = 17), name = "FT Applied") +
   scale_alpha_manual(values = c("transparent" = 0.4, "opaque" = 1), guide = "none") +
   scale_x_continuous(name = "207Pb/206Pb Date (Ma)", limits=c(0, 3500), breaks = seq(0, 3000, 500)) +
@@ -598,7 +551,7 @@ ZHe_UPb_FT <- ZHe_plot_data %>%
         legend.position = "none")
 
 ZHe_UPb_FT
-ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Fig.S3_2026_01_21.pdf", plot = ZHe_UPb_FT, width = 4, height = 4)
+#ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Fig.S3_2026_01_21.pdf", plot = ZHe_UPb_FT, width = 4, height = 4)
 ```
 ```{r ZHe_FT vs. ZHe plot consideration, echo = FALSE}
 ZHe_FT_comp <- ZHe_plot_data %>%
@@ -624,8 +577,6 @@ ZHe_FT_comp <- ZHe_plot_data %>%
                alpha = .3, fill = "#225555") + # Mazatzal, from west
   annotate("rect", xmin = 1820, xmax = 1880, ymin = -Inf, ymax = Inf,
                alpha = .3, fill = "#225555") + # Penokean from S and E
-  # annotate("rect", xmin = 1800, xmax = 2000, ymin = -Inf, ymax = Inf,
-  #              alpha = .1, fill = "green") + # Trans Hudson Orogen from west or recycled
   annotate("rect", xmin = 2700, xmax = 3000, ymin = -Inf, ymax = Inf,
                alpha = .3, fill = "#225555") + # Superior Province from N
   # y axis
@@ -649,31 +600,18 @@ ZHe_FT_comp <- ZHe_plot_data %>%
                alpha = .3, fill = "#225555") + # Mazatzal, from west
   annotate("rect", ymin = 1820, ymax = 1880, xmin = -Inf, xmax = Inf,
                alpha = .3, fill = "#225555") + # Penokean from S and E
-  # annotate("rect", ymin = 1800, ymax = 2000, xmin = -Inf, xmax = Inf,
-  #              alpha = .1, fill = "green") + # Trans Hudson Orogen from west or recycled
   annotate("rect", ymin = 2700, ymax = 3000, xmin = -Inf, xmax = Inf,
                alpha = .3, fill = "#225555") + # Superior
   annotate("rect", xmax = Inf, xmin = - Inf, ymin = 985.5-35.8, ymax = 992.51 + 0.64, fill = "#437DBF", alpha = 0.4) +
   geom_hline(yintercept = 992.51, linewidth = 0.5, color = "#437DBF") +
   annotate("rect", ymax = Inf, ymin = - Inf, xmin = 985.5-35.8, xmax = 992.51 + 0.64, fill = "#437DBF", alpha = 0.4) +
   geom_vline(xintercept = 992.51, linewidth = 0.5, color = "#437DBF") +
-  # annotate("rect", xmin = -Inf, xmax = Inf, ymin = 980, ymax = 1250,
-  #              alpha = .1, fill = "orange") + 
-  # annotate("rect", xmin = 980, xmax = 1250, ymin = -Inf, ymax = Inf,
-  #              alpha = .1, fill = "orange") +
-  # annotate("rect", xmin = -Inf, xmax = Inf, ymin = 1350, ymax = 1500,
-  #              alpha = .1, fill = "pink") + 
-  # annotate("rect", xmin = 1350, xmax = 1500, ymin = -Inf, ymax = Inf,
-  #              alpha = .1, fill = "pink") +
   geom_abline(slope = 1,  linewidth = 0.5, color = "black", linetype = "dashed") +
   geom_errorbar(lineend = "square", orientation = "x") +
   geom_errorbar(lineend = "square", orientation = "y") +
   geom_point(size = 2) +
-  #scale_color_viridis(option = "C", transform = "log", limits = c(10, 2000), breaks = c(10, 100, 1000), name = "eU (ppm)") +
-  #scale_color_viridis(trans = "log", limits = c(5, 780), name = "Max Alpha Dose (a/g x 10^16)") +
   scale_color_viridis(trans = "log", option = color_scale, limits = color_limits, breaks = color_breaks) +
   geom_text(aes(x = 1000, y = 1600, label = paste("n = ", n_ft_type)), color = "black") +
-   #scale_color_viridis(option = color_scale, limits = c(0, 800), breaks = seq(0, 800, 100)) +
   scale_shape_manual(values = c("None" = 15, "Conventional" = 16, "Since Deposition Only" = 17), name = "FT Applied") +
   scale_alpha_manual(values = c("transparent" = 0.4, "opaque" = 1), guide = "none") +
   scale_x_continuous(name = "ZHe Date, Normal FT Correction (Ma)", limits=c(900, 1700), breaks = seq(900, 1700, 200)) +
@@ -691,9 +629,10 @@ ZHe_FT_comp <- ZHe_plot_data %>%
         legend.position = "none")
 
 ZHe_FT_comp
-ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Fig.S3_inset_2026_01_21.pdf", plot = ZHe_FT_comp, width = 2.47, height = 1.6)
+#ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Fig.S3_inset_2026_01_21.pdf", plot = ZHe_FT_comp, width = 2.47, height = 1.6)
 ```
 ```{r ZHe density plot supplement}
+# not used in figures
 zhe.density.ft <- ZHe_plot_data %>%
   ggplot() +
    geom_density(aes(x = FT_date_plot), bw = binwidth, fill = "black", alpha = 0.6, adjust = 2) +
@@ -707,7 +646,7 @@ zhe.density.ft <- ZHe_plot_data %>%
     axis.text = element_text(size = 9),
     axis.title = element_text(size = 11))
 zhe.density.ft
-ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Fig.S3zhe.pdf", plot = zhe.density.ft, width = 4, height = 2)
+#ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Fig.S3zhe.pdf", plot = zhe.density.ft, width = 4, height = 2)
 ```
 ```{r ZHe_FT vs. ZHe plot consideration zoomed in, echo = FALSE}
 ZHe_FT_comp_zoom <- ZHe_plot_data %>%
@@ -743,22 +682,11 @@ ZHe_FT_comp_zoom <- ZHe_plot_data %>%
   geom_hline(yintercept = 992.51, linewidth = 0.5, color = "#437DBF") +
   annotate("rect", ymax = Inf, ymin = - Inf, xmin = 985.5-35.8, xmax = 992.51 + 0.64, fill = "#437DBF", alpha = 0.4) +
   geom_vline(xintercept = 992.51, linewidth = 0.5, color = "#437DBF") +
-  # annotate("rect", xmin = -Inf, xmax = Inf, ymin = 980, ymax = 1250,
-  #              alpha = .1, fill = "orange") + 
-  # annotate("rect", xmin = 980, xmax = 1250, ymin = -Inf, ymax = Inf,
-  #              alpha = .1, fill = "orange") +
-  # annotate("rect", xmin = -Inf, xmax = Inf, ymin = 1350, ymax = 1500,
-  #              alpha = .1, fill = "pink") + 
-  # annotate("rect", xmin = 1350, xmax = 1500, ymin = -Inf, ymax = Inf,
-  #              alpha = .1, fill = "pink") +
   geom_abline(slope = 1,  linewidth = 0.5, color = "black", linetype = "dashed") +
   geom_errorbar(lineend = "square", orientation = "x") +
   geom_errorbar(lineend = "square", orientation = "y") +
   geom_point(size = 2) +
-  #scale_color_viridis(option = "C", transform = "log", limits = c(10, 2000), breaks = c(10, 100, 1000), name = "eU (ppm)") +
-  #scale_color_viridis(trans = "log", limits = c(5, 780), name = "Max Alpha Dose (a/g x 10^16)") +
   scale_color_viridis(trans = "log", option = color_scale, limits = color_limits, breaks = color_breaks) +
-   #scale_color_viridis(option = color_scale, limits = c(0, 800), breaks = seq(0, 800, 100)) +
   scale_shape_manual(values = c("None" = 15, "Conventional" = 16, "Since Deposition Only" = 17), name = "FT Applied") +
   scale_alpha_manual(values = c("transparent" = 0.4, "opaque" = 1), guide = "none") +
   scale_x_continuous(name = "ZHe Date, Conventional FT Correction (Ma)", limits=c(900, 1300), breaks = seq(900, 1300, 100)) +
@@ -776,7 +704,7 @@ ZHe_FT_comp_zoom <- ZHe_plot_data %>%
         legend.position = "none")
 
 ZHe_FT_comp_zoom
-ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Fig.S3_zoom_2026_01_21.pdf", plot = ZHe_FT_comp_zoom, width = 6.5, height = 3)
+#ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Fig.S3_zoom_2026_01_21.pdf", plot = ZHe_FT_comp_zoom, width = 6.5, height = 3)
 ```
 ```{r ZHe cumulative density function plot, echo = FALSE}
 ZHe_cdf_data <- ZHe_plot_data %>%
@@ -806,7 +734,6 @@ zhe_cdf <- ZHe_cdf_data %>%
   coord_cartesian(clip = "off") +
   xlim(00, 2000) +
   xlab("ZHe Date (Ma)") +
-  #scale_x_continuous(name = "207Pb/206Pb Date (Ma)", breaks = seq(1000, 3000, 500)) +
   scale_color_manual(values = c("None" = "gray", "Conventional (Entire History)" = "black", "Since Deposition Only" = "red"), name = "FT Correction") +
   scale_y_continuous(name = "Cumulative Distribution Function", labels = scales::label_number(accuracy = 0.001)) +
   annotate("text", x = 1200, y = 0.26, label = paste("n =", nrow(ZHe_cdf_data)/nlevels(ZHe_cdf_data$FT_cor), sep = " "), colour =  "black", hjust = 0) +
@@ -821,26 +748,13 @@ zhe_cdf <- ZHe_cdf_data %>%
     plot.title = element_text(size=12),
     axis.text = element_text(size = 9),
     axis.title = element_text(size = 11))
-  # theme(panel.background = element_rect(fill = "transparent", colour = "transparent", linewidth = 0.75),
-  #       panel.border = element_rect(fill = NA, color = "black", linewidth = 0.75),
-  #       axis.ticks = element_line(colour = "black", linewidth = 0.5),
-  #       axis.ticks.length = unit(-0.2,"cm"),
-  #       axis.text = element_text(size = 9),
-  #       axis.title = element_text(size = 11),
-  #       plot.margin = grid::unit(c(0,0,0,0), "mm"),
-  #       legend.background = element_rect(fill = NA, colour = NA),
-  #       legend.key = element_blank(),
-  #       legend.position = c(0.85,0.75),
-  #       legend.text = element_text(size = 9),
-  #       legend.title = element_text(size = 11))
 zhe_cdf
 
-ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Fig.S2C_2026_01_21.pdf", plot = zhe_cdf, width = 6.5, height = 3)
+#ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Fig.S2C_2026_01_21.pdf", plot = zhe_cdf, width = 6.5, height = 3)
 ```
 
 ```{r load model results summary tables, echo = FALSE}
-#Hft.con <- read.xlsx("/Volumes/LaCie/Jacobsville_Models_2025/HeFTy_Constraint_Summary.xlsx", startRow = 1, fillMergedCells = TRUE, check.names = TRUE)
-
+# STOPPED EDITING HERE
 Hft.con <- drop_na(read.csv("/Volumes/LaCie/Jacobsville_Models_2025/HeFTy_Constraint_Summary.csv")) %>%
   select(!c("X"))
 
