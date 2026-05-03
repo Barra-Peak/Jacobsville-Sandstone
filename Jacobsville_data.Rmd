@@ -85,7 +85,6 @@ suppressWarnings(upb_clean <- upb_data_all %>%
   arrange(Run, Sample, Grain, .by_group = T))
 ```
 ```{r clean and combine He tables, echo = F}
-# problem with referencing dates are all wrong in output tables
 he_input_units <- he_input_data[1, ]
 he_input_data <- he_input_data[-1, ] # remove unit row
 
@@ -204,10 +203,10 @@ inheritance_ft <- full_join(date_inheritance_data, gz_inheritance_data) %>%
   filter(fmol.4He > X.) # remove columns with He uncertainty higher than He
 colnames(inheritance_ft) = hecalc_header
 
-write.xlsx(inheritance_ft, paste("/Users/barrapeak/Dropbox/Code/GitHub/Jacobsville-Sandstone", "inh_FT_hecalc_input.xlsx", sep = ""))
+write.xlsx(inheritance_ft, paste("/Users/barrapeak/Dropbox/Code/GitHub/Jacobsville-Sandstone/", "inh_FT_hecalc_input.xlsx", sep = ""))
 ```
 ```{r load HeCalc date outputs}
-all_FT_dates <- read.xlsx("/Users/barrapeak/Dropbox/Code/GitHub/Jacobsville-Sandstone/Data/2026_01_21_hecalc_GEOM_output.xlsx", startRow = 3, colNames = TRUE, check.names = TRUE, sep.names = "_") %>%
+all_FT_dates <- read.xlsx("/Users/barrapeak/Dropbox/Code/GitHub/Jacobsville-Sandstone/2026_01_21_hecalc_GEOM_output.xlsx", startRow = 3, colNames = TRUE, check.names = TRUE, sep.names = "_") %>%
   select(!starts_with("M")) %>%
   select(!starts_with("N"))
 colnames(all_FT_dates) <- paste(colnames(all_FT_dates),"all_FT", sep = "_")
@@ -423,7 +422,7 @@ colnames(he_print) <- c("Runab", "Sample", "Grainc", "Length 1d", "Width 1e",
 ```{r write and save tables as xlsx}
 # human reader file add sheets ---
 write.xlsx(print_upb, "/Users/barrapeak/Dropbox/Code/GitHub/Jacobsville-Sandstone/data_tables_S1.xlsx", sheetName = "Table S1. U-Pb Data")
-write.xlsx(he_print, "/Users/barrapeak/Dropbox/Code/GitHub/Jacobsville-Sandstone/data_tables_S4_2026_01_21.xlsx", sheetName = "Sheet1")
+write.xlsx(he_print, "/Users/barrapeak/Dropbox/Code/GitHub/Jacobsville-Sandstone/data_tables_S2.xlsx", sheetName = "Sheet1")
 
 # repository file add sheets ----
 write.xlsx(repository_upb, "/Users/barrapeak/Dropbox/Code/GitHub/Jacobsville-Sandstone/repository_data_tables.xlsx",
