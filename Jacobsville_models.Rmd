@@ -125,10 +125,11 @@ toc()
 ```
 ```{save data frames as machine readable files, echo = FALSE}
 # this may not work from markdown file depending on memory, copying and pasting the save commands into a new script and running that worked
-write.xlsx(constraints.df, "/Volumes/LaCie/Jacobsville_Models_2025/HeFTy_Constraint_Summary.xlsx")
-write.csv(constraints.df, "/Volumes/LaCie/Jacobsville_Models_2025/HeFTy_Constraint_Summary.csv")
-write.xlsx(paths.df, "/Volumes/LaCie/Jacobsville_Models_2025/HeFTy_Paths_all.xlsx")
-write.csv(paths.df, "/Volumes/LaCie/Jacobsville_Models_2025/HeFTy_Paths_all.csv")
+
+#write.xlsx(constraints.df, "/Users/barrapeak/Dropbox/Code/GitHub/Jacobsville-Sandstone/HeFTy_Constraint_Summary.xlsx")
+write.csv(constraints.df,"/Users/barrapeak/Dropbox/Code/GitHub/Jacobsville-Sandstone/HeFTy_Constraint_Summary.csv")
+#write.xlsx(paths.df, "/Volumes/LaCie/Jacobsville_Models_2025/HeFTy_Paths_all.xlsx")
+write.csv(paths.df, "/Users/barrapeak/Dropbox/Code/GitHub/Jacobsville-Sandstone/HeFTy_Paths_all.csv")
 
 ```
 
@@ -401,17 +402,3 @@ for(i in 1:length(files)){
 }
 tictoc::toc()
 ```
-
-```{r cars}
-summary(cars)
-```
-
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
-```
-
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
