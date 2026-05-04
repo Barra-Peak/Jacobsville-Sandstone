@@ -98,7 +98,7 @@ all_data <- all_data %>%
   # delete components of uncertainty calculation
   select(!c(A.u, B.u, C.u, D.u))
 ```
-```{r Figure 2. combined density plots, echo = F}
+```{r Fig. 2. combined density plots, echo = F}
 binwidth = 30
 # define density functions
 # new data
@@ -162,65 +162,12 @@ p.density.c
 #ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R.Fig.1_UPb.pdf", plot = p.density.c, width = 6.5, height = 2)
 ```
 ```{r U-Pb K-S test}
+# compare Malone data and new data
 ks <- ks.test(x = all_data$Pb207.Pb206_Date, y = malone_data_comp$X206Pb..207Pb..age, alternative = "two.sided")
 print(ks$p.value)
 ```
-```{r cumulative density function plot, echo = F}
-# not used in final figure
-upb_ts <- all_data %>%
-  select(Pb207.Pb206_Date) %>%
-  mutate(Source = "This Study")
-upb_m <- malone_data_comp %>%
-  select(X206Pb..207Pb..age) %>%
-  rename("Pb207.Pb206_Date" = "X206Pb..207Pb..age") %>%
-  mutate(Source = "Malone et al. (2020)")
-upb_cdf_data <- rbind(upb_ts, upb_m)
-
-upb_cdf <- upb_cdf_data %>%
-  ggplot(aes(x = Pb207.Pb206_Date, group = Source, color = Source)) +
-  annotate("rect", xmin = 980, xmax = 1010, ymin = -Inf, ymax = Inf,
-               alpha = .3, fill = "#997700") + # Rigolet
-  annotate("rect", xmin = 1020, xmax = 1090, ymin = -Inf, ymax = Inf,
-               alpha = .3, fill = "#997700") + # Ottawan
-  annotate("rect", xmin = 1070, xmax = 1110, ymin = -Inf, ymax = Inf,
-               alpha = .3, fill = "#72190E") + # MCR
-  annotate("rect", xmin = 1140, xmax = 1190, ymin = -Inf, ymax = Inf,
-               alpha = .2, fill = "#997700") + # Shawinigan
-  annotate("rect", xmin = 1200, xmax = 1250, ymin = -Inf, ymax = Inf,
-               alpha = .2, fill = "#997700") + # Elezevirian
-  annotate("rect", xmin = 1300, xmax = 1360, ymin = -Inf, ymax = Inf,
-               alpha = .3, fill = "#332288") + #Pre-Elzevierian
-  annotate("rect", xmin = 1340, xmax = 1370, ymin = -Inf, ymax = Inf,
-               alpha = .3, fill = "#332288") + # SGGRP south
-  annotate("rect", xmin = 1380, xmax = 1520, ymin = -Inf, ymax = Inf,
-               alpha = .3, fill = "#332288") + # EGGRP from south + east
-  annotate("rect", xmin = 1600, xmax = 1700, ymin = -Inf, ymax = Inf,
-               alpha = .3, fill = "#225555") + # Mazatzal, from west
-  annotate("rect", xmin = 1820, xmax = 1880, ymin = -Inf, ymax = Inf,
-               alpha = .3, fill = "#225555") + # Penokean from S and E
-  annotate("rect", xmin = 2700, xmax = 3000, ymin = -Inf, ymax = Inf,
-               alpha = .3, fill = "#225555") + # Superior Province from N
-  stat_ecdf() +
-  coord_cartesian(clip = "off") +
-  xlim(500, 3000) +
-  xlab("207Pb/206Pb Date (Ma)") +
-  scale_color_manual(values = c("This Study" = "black", "Malone et al. (2020)" = "gray")) +
-  scale_y_continuous(name = "Cumulative Distribution Function", labels = scales::label_number(accuracy = 0.001)) +
-  annotate("text", x = 2000, y = 0.2, label = paste("K-S p-value =", signif(ks$p.value, 2)), colour =  "black", hjust = 0) +
-  theme_bw() +
-  theme(legend.background = element_rect(fill = NA, colour = NA),
-        legend.key = element_blank(),
-        legend.position = c(0.75,0.5),
-        legend.text = element_text(size = 9),
-        legend.title = element_text(size = 9, color = "transparent"),
-    plot.title = element_text(size=12),
-    axis.text = element_text(size = 9),
-    axis.title = element_text(size = 11))
-upb_cdf
-
-#ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R.Fig.S1A.pdf", plot = upb_cdf, width = 6.5, height = 3)
-```
 ```{r ZHe for plotting, echo = FALSE}
+# sort and group data for plotting
 ZHe_plot_data <- all_data %>%
   drop_na(He4.fmol) %>%
   filter(is.na(Rejection.Reason)) %>%
@@ -261,7 +208,7 @@ color_breaks <- c(1, 10, 100, 1000)
 color_limits <- c(1, 1000)
 color_trans <- "log"
 ```
-```{r ZHe vs. eU plot, echo = FALSE}
+```{r Fig. S1 ZHe vs. eU plot, echo = FALSE}
 ZHe_eU <- ZHe_plot_data %>%
   ggplot(aes(x = eU, y = ZHe.Report, xmin = eU - eU.1s, xmax = eU + eU.1s, ymin = ZHe.Report - ZHe.Report.1s, ymax = ZHe.Report + ZHe.Report.1s, shape = FT.Applied, colour =  Max.Alpha.Dose, alpha = Opacity)) +
   geom_hline(yintercept = 992, linewidth = 0.5, color = "black") +
@@ -293,7 +240,7 @@ ZHe_eU <- ZHe_plot_data %>%
 ZHe_eU
 #ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Fig.S2eU_2026_01_21.pdf", plot = ZHe_eU, width = 3.75, height = 5.5)
 ```
-```{r ZHe vs. alpha plot, echo = FALSE}
+```{r Fig. S1 ZHe vs. alpha plot, echo = FALSE}
 ZHe_alpha <- ZHe_plot_data %>%
   ggplot(aes(x = Max.Alpha.Dose, y = ZHe.Report, xmin = Max.Alpha.Dose - Max.Alpha.Dose.1s, xmax = Max.Alpha.Dose + Max.Alpha.Dose.1s, ymin = ZHe.Report - ZHe.Report.1s, ymax = ZHe.Report + ZHe.Report.1s, shape = FT.Applied, colour =  Max.Alpha.Dose, alpha = Opacity)) +
   geom_hline(yintercept = 992, linewidth = 0.5, color = "black") +
@@ -326,7 +273,7 @@ ZHe_alpha <- ZHe_plot_data %>%
 ZHe_alpha
 #ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Fig.S2alpha_2026_01_21.pdf", plot = ZHe_alpha, width = 3.75, height = 5.5)
 ```
-```{r ZHe vs. RFT, echo = FALSE}
+```{r Fig. S1 ZHe vs. RFT, echo = FALSE}
 ZHe_RFT <- ZHe_plot_data %>%
   filter(FT.Applied == "Conventional") %>%
   ggplot(aes(x = RFT, y = ZHe.Report, xmin = RFT - RFT.1s, xmax = RFT + RFT.1s, ymin = ZHe.Report - ZHe.Report.1s, ymax = ZHe.Report + ZHe.Report.1s, shape = FT.Applied, colour =  Max.Alpha.Dose, alpha = Opacity)) +
@@ -362,7 +309,7 @@ ZHe_RFT
 #ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Fig.S2RFT_2026_01_21.pdf", plot = ZHe_RFT, width = 3.75, height = 5.5)
 ```
 
-```{r ZHe vs. UPb plot Main Paper, echo = FALSE}
+```{r Fig. 3 ZHe vs. UPb plot Main Paper, echo = FALSE}
 td <- (992.51+0.64 - (((992.51 + 0.64) - (985.5- 35.8))/2)) *10^6 # maximum depositonal age in yr
 td.unc <- (((992.51 + 0.64) - (985.5- 35.8))/2) *10^6 # unvertainty on depositional age in yr
 ZHe_UPb <- ZHe_plot_data %>%
@@ -477,7 +424,7 @@ zhe.density.3
 #ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Fig.3zhe.pdf", plot = zhe.density.3, width = 4, height = 2)
 ```
 
-```{r ZHe vs. UPb plot Ft consideration, echo = FALSE}
+```{r Fig. S2 ZHe vs. UPb plot Ft consideration, echo = FALSE}
 ZHe_UPb_FT <- ZHe_plot_data %>%
   ggplot(aes(x = Pb207.Pb206_Date, y = FT_date_plot, xmin = Pb207.Pb206_Date - Pb207.Pb206_Date.2SE, xmax = Pb207.Pb206_Date + Pb207.Pb206_Date.2SE, ymin = FT_date_plot - FT_date_plot.1s, ymax = FT_date_plot + FT_date_plot.1s, shape = FT.Applied.Extra, colour =  Max.Alpha.Dose, alpha = Opacity)) +
   annotate("rect", xmin = 980, xmax = 1010, ymin = -Inf, ymax = Inf,
@@ -553,7 +500,7 @@ ZHe_UPb_FT <- ZHe_plot_data %>%
 ZHe_UPb_FT
 #ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Fig.S3_2026_01_21.pdf", plot = ZHe_UPb_FT, width = 4, height = 4)
 ```
-```{r ZHe_FT vs. ZHe plot consideration, echo = FALSE}
+```{r Fig. S2 ZHe_FT vs. ZHe plot consideration, echo = FALSE}
 ZHe_FT_comp <- ZHe_plot_data %>%
   filter(FT.Applied.Extra == "Since Deposition Only") %>%
   ggplot(aes(x = ZHe.Report, y = FT_date_plot, xmin = ZHe.Report - ZHe.Report.1s, xmax = ZHe.Report + ZHe.Report.1s, ymin = FT_date_plot - FT_date_plot.1s, ymax = FT_date_plot + FT_date_plot.1s, shape = FT.Applied.Extra, colour =  Max.Alpha.Dose, alpha = Opacity)) +
@@ -631,8 +578,7 @@ ZHe_FT_comp <- ZHe_plot_data %>%
 ZHe_FT_comp
 #ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Fig.S3_inset_2026_01_21.pdf", plot = ZHe_FT_comp, width = 2.47, height = 1.6)
 ```
-```{r ZHe density plot supplement}
-# not used in figures
+```{r Fig. S2 ZHe density plot supplement}
 zhe.density.ft <- ZHe_plot_data %>%
   ggplot() +
    geom_density(aes(x = FT_date_plot), bw = binwidth, fill = "black", alpha = 0.6, adjust = 2) +
@@ -648,7 +594,7 @@ zhe.density.ft <- ZHe_plot_data %>%
 zhe.density.ft
 #ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Fig.S3zhe.pdf", plot = zhe.density.ft, width = 4, height = 2)
 ```
-```{r ZHe_FT vs. ZHe plot consideration zoomed in, echo = FALSE}
+```{r Fig. S2 ZHe_FT vs. ZHe plot consideration zoomed in, echo = FALSE}
 ZHe_FT_comp_zoom <- ZHe_plot_data %>%
   filter(FT.Applied.Extra == "Since Deposition Only") %>%
   filter(ZHe.Report < 1300) %>%
@@ -706,7 +652,7 @@ ZHe_FT_comp_zoom <- ZHe_plot_data %>%
 ZHe_FT_comp_zoom
 #ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Fig.S3_zoom_2026_01_21.pdf", plot = ZHe_FT_comp_zoom, width = 6.5, height = 3)
 ```
-```{r ZHe cumulative density function plot, echo = FALSE}
+```{r Fig. S2 ZHe cumulative density function plot, echo = FALSE}
 ZHe_cdf_data <- ZHe_plot_data %>%
   filter(Fragment == "No") %>%
   select(c(Run, Sample, Grain, Fragment, Uncorrected.Date, ZHe.Report, FT_date_plot, FT.Applied.Extra))  %>%
@@ -753,9 +699,8 @@ zhe_cdf
 #ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Fig.S2C_2026_01_21.pdf", plot = zhe_cdf, width = 6.5, height = 3)
 ```
 
-```{r load model results summary tables, echo = FALSE}
-# STOPPED EDITING HERE
-Hft.con <- drop_na(read.csv("/Volumes/LaCie/Jacobsville_Models_2025/HeFTy_Constraint_Summary.csv")) %>%
+```{r load model results summary tables for Fig. 4, 5, S3, echo = FALSE}
+Hft.con <- drop_na(read.csv("/Users/barrapeak/Dropbox/Code/GitHub/Jacobsville-Sandstone/HeFTy_Constraint_Summary.csv")) %>%
   select(!c("X"))
 
 Hft.con <- Hft.con %>%
@@ -764,7 +709,7 @@ Hft.con <- Hft.con %>%
   mutate(Sample = case_when(Sample == "1_74" ~ "1_074",
                             .default = Sample))
 
-Hft.tT <- drop_na(read.csv("/Volumes/LaCie/Jacobsville_Models_2025/HeFTy_Paths_all.csv")) %>%
+Hft.tT <- drop_na(read.csv("/Users/barrapeak/Dropbox/Code/GitHub/Jacobsville-Sandstone/HeFTy_Paths_all.csv")) %>%
   select(!c("X"))
 
 Hft.tT <- Hft.tT %>%
@@ -786,7 +731,7 @@ data.to.merge <- all_data %>%
 
 tT.data <- left_join(Hft.tT, data.to.merge, by = "Sample")
 ```
-```{r Fig. 4 plot model setup, echo = FALSE}
+```{r Fig. 4 and S3A plot model setup, echo = FALSE}
 constraints <- Hft.con %>%
   select(c(HeFTy.ID, Max.time..Ma., Min.time..Ma., Max.temp..C.,
            Min.temp..C., Sample, Table.ID, Type)) %>%
@@ -825,8 +770,8 @@ models <- cons.df %>%
   geom_polygon(linewidth = 0.5, alpha = 0.3) +
   annotate("rect", xmin = 485, xmax = 995, ymin = 0, ymax = 300, color = "black", fill = "transparent") +
   #geom_label(aes(x = mean(Time), y = mean(Temp), group = HeFTy.ID, label = Table.ID), colour = "black") +
-  scale_color_manual(values = col_vals) +
-  scale_linetype_manual(values = line_vals) +
+  scale_color_manual(name = "Constraint Type", values = col_vals) +
+  scale_linetype_manual(name = "Constraint Type", values = line_vals) +
   theme(panel.background = element_rect(fill = "transparent", color = "transparent", linewidth = 1),
         panel.border = element_rect(fill = NA, color = "black", linewidth = 1),
         axis.ticks = element_line(colour = "black", linewidth = 0.5),
@@ -839,10 +784,10 @@ models <- cons.df %>%
         legend.key = element_blank(),
         legend.text = element_text(size = 9),
         legend.position = "bottom") +
-  facet_wrap(vars(as.factor(Model.Type)), ncol = 1)
+  facet_wrap(vars(as.factor(Type)), ncol = 1)
 models
 
-ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Fig.4_2026_03_09.pdf", plot = models, width = 3.25, height = 7)
+#ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Fig.4_2026_03_09.pdf", plot = models, width = 3.25, height = 7)
 ```
 ```{r min and max temp determinations, echo = FALSE}
 neo.envelopes <- tT.data %>%
@@ -880,7 +825,8 @@ neo.max <- tT.data %>%
   mutate(Family_fac = factor(Family, levels = c("Permissive", "Required PRZ or >", "Required PRZ or <")))
   
 ```
-```{r REVISIT plot max neoproterozic heating model compilation grouped, echo = F}
+```{r Fig. 5 and S3B plot max neoproterozic heating model compilation grouped, echo = F}
+# individual density plots for each group of detrital zircon with shared tT behavior overlain in adobe illustrator
 paths.limited <- neo.max
 n_family <- paths.limited %>%
   ungroup() %>%
@@ -888,6 +834,7 @@ n_family <- paths.limited %>%
   count(Family_fac) %>%
   mutate(n = n/1001)
 
+# permissive dates
 all.paths.Permissive <- paths.limited %>%
   filter(Family_fac == "Permissive") %>%
   ggplot() +
@@ -915,8 +862,9 @@ all.paths.Permissive <- paths.limited %>%
         plot.title = element_text(hjust = 0.5)) +
   facet_wrap(vars(as.factor(Type)), ncol  = 1)
 all.paths.Permissive
-ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Model.Max.Heating.Permissive.pdf", all.paths.Permissive, dpi = 300, width = 3.25, height = 7)
+#ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Model.Max.Heating.Permissive.pdf", all.paths.Permissive, dpi = 300, width = 3.25, height = 7)
 
+# dates that require cooler temps
 all.paths.Cool <- paths.limited %>%
   filter(Family_fac == "Required PRZ or <") %>%
   ggplot() +
@@ -944,8 +892,9 @@ all.paths.Cool <- paths.limited %>%
         plot.title = element_text(hjust = 0.5)) +
   facet_wrap(vars(as.factor(Type)), ncol  = 1)
 all.paths.Cool
-ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Model.Max.Heating.Cool.pdf", all.paths.Cool, dpi = 300, width = 3.25, height = 7)
+#ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Model.Max.Heating.Cool.pdf", all.paths.Cool, dpi = 300, width = 3.25, height = 7)
 
+# dates that require hotter temps
 all.paths.Hot <- paths.limited %>%
   filter(Family_fac == "Required PRZ or >") %>%
   ggplot() +
@@ -973,787 +922,5 @@ all.paths.Hot <- paths.limited %>%
         plot.title = element_text(hjust = 0.5)) +
   facet_wrap(vars(as.factor(Type)), ncol  = 1)
 all.paths.Hot
-ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Model.Max.Heating.Hot.pdf", all.paths.Hot, dpi = 300, width = 3.25, height = 7)
-```
-```{r plot neoproterozoic points, echo = FALSE}
-neo.points <- neo.points %>%
-  ungroup() %>%
-  ggplot(aes(x = Max.Time, y = Max.Temp, color = as.factor(Type))) +
-  geom_point(alpha = 1) +
-  #geom_point(aes(x = Min.Time, y = Min.Temp), alpha = 0.5) +
-  scale_x_reverse(name = "Time (Ma)", limits = c(450, 1000), breaks = seq(450, 1000, 50)) +
-  scale_y_reverse(name = "Temperature (°C)", limits = c(0, 300), breaks = seq(0, 300, 50)) +
-  #coord_cartesian(xlim = axes$Time, ylim = axes$Temp) +
-  #geom_polygon(data = cons.df[cons.df$Type %in% "Constraint", ], mapping = aes(x = Time, y = Temp, group = Num), colour = "red", linewidth = 0.5, fill = "transparent") +
-  theme(panel.background = element_rect(fill = "transparent", color = "transparent", linewidth = 1),
-        panel.border = element_rect(fill = NA, color = "black", linewidth = 1),
-        axis.ticks = element_line(colour = "black", linewidth = 0.5),
-        axis.ticks.length = unit(-0.2,"cm"),
-        panel.grid.major = element_line(colour = "gray", linewidth = 0.25, linetype = 'dashed'),
-        plot.margin = grid::unit(c(0,0,0,0), "mm"),
-        legend.position = "bottom")
-neo.points
-```
-```{r plot neoproterozoic envelope, echo = FALSE}
-neo.plot <- neo.envelopes %>%
-  ungroup() %>%
-  ggplot(aes(x = Max.Time, y = Max.Temp, color = as.factor(Type), alpha = as.factor(Constraint))) +
-  geom_point() +
-  #geom_point(aes(x = Min.Time, y = Min.Temp), alpha = 0.5) +
-  scale_x_reverse(name = "Time (Ma)", limits = c(450, 1000), breaks = seq(450, 1000, 50)) +
-  scale_y_reverse(name = "Temperature (°C)", limits = c(0, 300), breaks = seq(0, 300, 50)) +
-  scale_alpha_manual(values = c("C5Sub0" = 1, "C5Sub1" = 0.75,
-                                "C5Sub2" = 0.5, "C5Sub3" = 0.25)) +
-  #coord_cartesian(xlim = axes$Time, ylim = axes$Temp) +
-  #geom_polygon(data = cons.df[cons.df$Type %in% "Constraint", ], mapping = aes(x = Time, y = Temp, group = Num), colour = "red", linewidth = 0.5, fill = "transparent") +
-  theme(panel.background = element_rect(fill = "transparent", color = "transparent", linewidth = 1),
-        panel.border = element_rect(fill = NA, color = "black", linewidth = 1),
-        axis.ticks = element_line(colour = "black", linewidth = 0.5),
-        axis.ticks.length = unit(-0.2,"cm"),
-        panel.grid.major = element_line(colour = "gray", linewidth = 0.25, linetype = 'dashed'),
-        plot.margin = grid::unit(c(0,0,0,0), "mm"),
-        legend.position = "bottom") # +
-  #facet_wrap(vars(as.factor(Constraint)), ncol = 1)
-neo.plot
-```
-
-```{r plot neoproterozoic density, echo = FALSE}
-family.cols <- c("Required PRZ or <" = "#1F77B4", "Permissive" = "#2CA02C",
-                 "Required PRZ or >" = "#E73F74")
-neo.density <- tT.data %>%
-  left_join(neo.max, by = c("Sample", "Type", "Fit")) %>%
-  ungroup() %>%
-  filter(str_detect(Constraint, "C4", negate = TRUE)) %>%
-  #mutate(Type.fac = factor(Type, levels = c("Less_Restrictive", "More_Restrictive", "Most_Restrictive"))) %>%
-  #mutate(Sample.Lab = paste(Sample, ZHe.Report, "Ma", sep = " ")) %>%
-  #group_by(Sample) %>%
-  ggplot(aes(x = Time, y = Temp, group = interaction(Type, Constraint), color = as.factor(Family), fill = after_scale(color))) +
-  #stat_density_2d(contour_var = "ndensity") +
-  stat_density_2d(aes(x = Time, y = Temp, fill = after_stat(level)), contour_var = "ndensity", geom = "polygon") +
-  scale_color_manual(values = family.cols) +
-  #scale_x_reverse(name = "Time (Ma)", limits = c(0, 1000), breaks = seq(0, 1000, 200)) +
-  scale_x_reverse(name = "Time (Ma)") +
-  scale_y_reverse(name = "Temperature (°C)", limits = c(0, 300), breaks = seq(0, 300, 50)) +
-  #ggtitle(label = "Most Restrictive") +
-  #coord_cartesian(xlim = axes$Time, ylim = axes$Temp) +
-  #geom_polygon(data = cons.df[cons.df$Type %in% "Constraint", ], mapping = aes(x = Time, y = Temp, group = Num), colour = "red", linewidth = 0.5, fill = "transparent") +
-  theme(panel.background = element_rect(fill = "transparent", color = "transparent", linewidth = 1),
-        panel.border = element_rect(fill = NA, color = "black", linewidth = 1),
-        axis.ticks = element_line(colour = "black", linewidth = 0.5),
-        axis.ticks.length = unit(-0.2,"cm"),
-        panel.grid.major = element_line(colour = "gray", linewidth = 0.25, linetype = 'dashed'),
-        plot.margin = grid::unit(c(0,0,0,0), "mm"),
-        legend.position = "bottom") +
-  facet_grid(Family ~ Constraint, scales = "free_x")
-neo.density
-
-ggsave("/Volumes/LaCie/Jacobsville_Models_2025/tT_all_density_most_restrictive.pdf", plot = neo.density, width = 15, height = 4)
-
-neo.density.all <- tT.data %>%
-  left_join(neo.max, by = c("Sample", "Type", "Fit")) %>%
-  ungroup() %>%
-  filter(str_detect(Constraint, "C5", negate = FALSE)) %>%
-  #filter(between(Time, 497, 985)) %>%
-  #mutate(Type.fac = factor(Type, levels = c("Less_Restrictive", "More_Restrictive", "Most_Restrictive"))) %>%
-  #mutate(Sample.Lab = paste(Sample, ZHe.Report, "Ma", sep = " ")) %>%
-  #group_by(Sample) %>%
-  ggplot(aes(x = Time, y = Temp, group = interaction(Type, Family), color = as.factor(Family), fill = after_scale(color))) +
-  #stat_density_2d(contour_var = "ndensity") +
-  stat_density_2d(aes(x = Time, y = Temp, fill = after_stat(level)), contour_var = "ndensity", geom = "polygon") +
-  scale_color_manual(values = family.cols) +
-  #scale_x_reverse(name = "Time (Ma)", limits = c(0, 1000), breaks = seq(0, 1000, 200)) +
-  scale_x_reverse(name = "Time (Ma)") +
-  scale_y_reverse(name = "Temperature (°C)", limits = c(0, 300), breaks = seq(0, 300, 50)) +
-  #ggtitle(label = "Most Restrictive") +
-  #coord_cartesian(xlim = axes$Time, ylim = axes$Temp) +
-  #geom_polygon(data = cons.df[cons.df$Type %in% "Constraint", ], mapping = aes(x = Time, y = Temp, group = Num), colour = "red", linewidth = 0.5, fill = "transparent") +
-  theme(panel.background = element_rect(fill = "transparent", color = "transparent", linewidth = 1),
-        panel.border = element_rect(fill = NA, color = "black", linewidth = 1),
-        axis.ticks = element_line(colour = "black", linewidth = 0.5),
-        axis.ticks.length = unit(-0.2,"cm"),
-        panel.grid.major = element_line(colour = "gray", linewidth = 0.25, linetype = 'dashed'),
-        plot.margin = grid::unit(c(0,0,0,0), "mm"),
-        legend.position = "bottom") +
-  facet_wrap(vars(as.factor(Type)), ncol = 1)
-neo.density.all
-```
-```{r plot all tT by sample, echo = FALSE}
-tT.all <- tT.data %>%
-  mutate(Type.fac = factor(Type, levels = c("Less_Restrictive", "More_Restrictive", "Most_Restrictive"))) %>%
-  mutate(Sample.Lab = paste(Sample, ZHe.Report, "Ma", sep = " ")) %>%
-  group_by(Sample) %>%
-  ggplot(aes(x = Time, y = Temp, group = interaction(Fit, Type.fac), color = Type.fac)) +
-  geom_point(size = 0.5) +
-  #scale_color_manual(values = hefty.cols) +
-  scale_x_reverse(name = "Time (Ma)", limits = c(0, 1000), breaks = seq(0, 1000, 200)) +
-  scale_y_reverse(name = "Temperature (°C)", limits = c(0, 300), breaks = seq(0, 300, 50)) +
-  #coord_cartesian(xlim = axes$Time, ylim = axes$Temp) +
-  #geom_polygon(data = cons.df[cons.df$Type %in% "Constraint", ], mapping = aes(x = Time, y = Temp, group = Num), colour = "red", linewidth = 0.5, fill = "transparent") +
-  theme(panel.background = element_rect(fill = "transparent", color = "transparent", linewidth = 1),
-        panel.border = element_rect(fill = NA, color = "black", linewidth = 1),
-        axis.ticks = element_line(colour = "black", linewidth = 0.5),
-        axis.ticks.length = unit(-0.2,"cm"),
-        panel.grid.major = element_line(colour = "gray", linewidth = 0.25, linetype = 'dashed'),
-        plot.margin = grid::unit(c(0,0,0,0), "mm"),
-        legend.position = "bottom") +
-  facet_wrap(vars(as.factor(Sample.Lab)), nrow = 5)
-tT.all
-
-ggsave("/Volumes/LaCie/Jacobsville_Models_2025/all_samples_points.pdf", plot = tT.all, width = 15, height = 9)
-  
-```
-```{r OLD models}
-date.predictions <- data.frame("Hft.File" = NA, "Sample" = NA, "Path"  = NA,
-                               "Com.GOF" = NA, "Date" = NA, "GOF" = NA)
-date.predictions <- date.predictions[F, ]
-
-all.paths <- data.frame("Type" = NA, "Sample"  = NA, "Path" = NA, "Date" = NA,
-                               "Com.GOF" = NA, "GOF" = NA, "Time.Dep" = NA,
-                        "Time.Unc" = NA, "Max.Temp" = NA, "Max.Time" = NA,
-                        "Hft.File" = NA)
-all.paths <- all.paths[F, ]
-
-neo.heating.summary <- data.frame("Type" = NA, "Sample" = NA, "Mean_Date" = NA, "Mean_Com.GOF" = NA, "Max_Dep" = NA, "Min_Dep" = NA,
-                                  "Mean_Dep" = NA, "Med_Dep" = NA, "Mean_Unc" = NA,
-                                  "Max_Max" = NA, "Min_Max" = NA, "Med_Max" = NA, "Time_Max_Max" = NA, 
-                                  "Time_Min_Max" = NA, "Time_Med_Max" = NA, "Hft.File" = NA)
-neo.heating.summary <- neo.heating.summary[F, ]
-
-pre.deposition.summary <- data.frame("Type" = NA, "Sample" = NA, "Mean_Date" = NA, "Mean_Com.GOF" = NA, "Mean_Dep" = NA, "First_PRZ_Cool_Time" = NA,
-                                     "Last_PRZ_Cool_Time" = NA, "Med_PRZ_Cool_Time" = NA, "First_20_Cool_Time" = NA, 
-                                     "Last_20_Cool_Time" = NA, "Med_20_Cool_Time" = NA, "First_PRZ_Cool_Temp" = NA,
-                                     "Last_PRZ_Cool_Temp" = NA, "Med_PRZ_Cool_Temp" = NA, "First_20_Cool_Temp" = NA, 
-                                     "Last_20_Cool_Temp" = NA, "Med_20_Cool_Temp" = NA, "Hft.File" = NA)
-pre.deposition.summary <- pre.deposition.summary[F, ]
-
-
-
-### GROUPED GRAIN MODELS ----
-#i = 14
-tictoc::tic()
-for(i in 1:length(files)){
-#for(i in 17:17){ # testing single file
-  file.name <- paste(path.name, files[i], sep = "/")
-  hft.file <- strsplit(files[i], "-inv-")[[1]][1]
-  #sample <- sub(".txt", "", strsplit(files[i], "-inv-")[[1]][2]])
-  
-  
-  file <- read_lines(file.name) # import using file path
-  
-  #### Isolate Paths ----
-  ## Paths are bracketed by entries that begin with "Individual Paths"
-  ## followed by 3 lines of header
-  
-  path_bounds <- which(str_detect(file, "^Individual paths")) #find index of bounds
-  path_data <- file[(path_bounds[1]+4):length(file)] # subset paths
-  path_data <- matrix(path_data) # convert to matrix for easier parsing
-  # each path is 2 lines
-  path_data_parse <- data.frame(t(sapply(strsplit(path_data, '\t'), c))) # make into data frame
-  path_data_parse$X2[1] <- "0" # fill first path value with 0 as in the others
-  path_data_parse <- path_data_parse %>% # remove empty columns at end of data frame
-    mutate_all(~ na_if(.,"")) %>%
-    select(!where(~ all(is.na(.x))))
-  header <- strsplit(file[(path_bounds[1]+3)], '\t')[[1]]
-  samples <- strsplit(file[(path_bounds[1]+1)], '\t')[[1]]
-  samples <- samples[-c(1,2)]
-  samples <- sub("^([^_]*_[^_]*).*", "\\1", samples)
-  
-  #### Subset longform data ----
-  row_odd <- seq_len(nrow(path_data_parse)) %% 2 # create odd and even row index
-  time.rows <- path_data_parse[row_odd == 1, ] # extract odd rows which contain time steps, bin predictions
-  temp.rows <- path_data_parse[row_odd == 0, ] # extract even rows which contain temp steps, GOF
-  num_path <- nrow(time.rows) # total number of paths
-  num_dates <- sum(str_detect(sapply(strsplit(file[(path_bounds[1]+3)], '\t'), c), "^GOF"), na.rm = TRUE) # find the number of modeled dates
-  temp.rows$X2 <- as.numeric(temp.rows$X2)
-  time.rows$v1 <- rep("", num_path)
-  time.rows$minGOF <- rep("", num_path) # isolate minimum GOF value
-  temp.rows$v2 <- rep("", num_path)
-  
-  ## pivot longer to put in plotting format
-  path.start <- which(time.rows[1, ] == "Time (Ma)", arr.ind = TRUE)[2] #find start of path time/temp steps
-  piv <- names(time.rows[ , (path.start + 1):(ncol(time.rows)-2)]) # column names to pivot
-  time.long <- time.rows %>% pivot_longer(cols = all_of(piv), values_to = "Time") # all_of() silences the warning message 
-  temp.long <- temp.rows %>% pivot_longer(cols = all_of(piv), values_to = "Temp")
-  
-  ## create columns headers 
-  time.header <- c("Path", "Delete") # "Delete" is an empty column retained from the original HeFTy file
-  temp.header <- c("Path1", "Com.GOF") # "Path1" is a duplicate of "Path" and will be deleted when combined
-  for (j in 1:num_dates){
-    time.header <- c(time.header, paste("Date", samples[j], sep = ".")) # save preds.df column names for later use
-    temp.header <- c(temp.header, paste("GOF", samples[j], sep = ".")) # save paths.df column names for later use
-  }
-  time.header <- c(time.header, "Delete2", "v1","minGOF","name1", "Time") # "Delete" columns are duplicates between the two vectors
-  temp.header <- c(temp.header, "Delete3", "v2","name2", "Temp")
-  colnames(time.long) <- time.header
-  colnames(temp.long) <- temp.header
-  
-  ## combine time and temp dataframes to create one dataframe with all information for plotting
-  com.paths <- cbind(time.long,temp.long)
-  com.paths.clean = subset(com.paths, select = -c(Delete, Delete2, Delete3, name1, name2, Path1))
-  #paths.df.1 <- com.paths.clean %>% select(Path, Time, Temp, Date.1, Com.GOF)
-  paths.df.1 <- com.paths.clean %>% select(!c(v1, minGOF, v2))
-  paths.df <- paths.df.1 %>% mutate(across(!c("Path"), as.numeric)) # convert numeric values
-  paths.df <- paths.df %>% # remove paths that go back in time (not allowed)
-    group_by(Path) %>% # group by path name
-    mutate(Invalid = case_when(lead(Time, n = 1) - Time > 0 ~ NA,
-                               .default = 1)) %>% # check for paths that go back in time
-    mutate(Remove = case_when(any(is.na(Invalid)) == T ~ NA,
-                              .default = 1)) %>%
-    drop_na(Remove)
-
-  # isolate and save best and worst fit paths for inputting into HeFTy
-  best <- paths.df %>%
-    filter(Path == "Best")
-  # write.table(best[, 2:3], file = paste(path.name, paste(sample, mod.type, "bf.txt", sep = "-"), sep = "/"), sep = "\t", 
-  #             row.names = F, col.names = F)
-  worst <- paths.df[which(paths.df$Com.GOF == min(paths.df$Com.GOF)), ]
-  while(length(unique(worst$Path)) > 1){
-    worst <- worst %>%
-      filter(Path == worst$Path[1])
-  }
-  # write.table(worst[, 2:3], file = paste(path.name, paste(sample, mod.type, "wf.txt", sep = "-"), sep = "/"), sep = "\t", 
-  #             row.names = F, col.names = F)
-  
-  keep <- rbind(best, worst) %>%
-    mutate(#Sample = sample,
-           Hft.File = hft.file) %>%
-    select(!c("Time", "Temp")) %>%
-    unique() %>%
-    mutate(Path = case_when(Path == "Best" ~ "Best",
-                            .default = "Worst")) #%>%
-  
-  names <- colnames(keep)
-  keep <- keep %>%
-    pivot_longer(cols = names[c(which(str_starts(colnames(keep), "Date")), which(str_starts(colnames(keep), "GOF")))], 
-                 names_to = "Sample", values_to = "Prediction") %>%
-    mutate(Type.Prediction = case_when(str_detect(Sample, "GOF") ~ "GOF",
-                                       .default = "Date")) %>%
-    mutate(Sample = sub("Date.", "", Sample)) %>%
-    mutate(Sample = sub("GOF.", "", Sample)) %>%
-    pivot_wider(id_cols = c(Path, Com.GOF, Hft.File, Sample), values_from = Prediction, names_from = Type.Prediction)
-
-    
-  
-  date.predictions <- rbind(date.predictions, keep[ , c(3, 4, 1, 2, 5, 6)]) # add to saved data frame
-  
-  ### find max and min temps in Neoproterozoic burial
-  
-  deposition.box <- paths.df %>%
-    filter(between(Time, 949.7, 993.15)) %>%
-    mutate(Type = case_when(str_detect(Path, "Acc") == T ~ "Acceptable",
-                            .default = "Good"))
-  
-  deposition.min <- deposition.box %>%
-    group_by(Type, Path) %>%
-    filter(Temp == min(Temp)) %>%
-    ungroup() %>%
-    rename("Time.Dep" = "Time", "Temp.Dep" = "Temp") %>%
-    select(Path, Time.Dep)
-  
-  unconformity.box <- paths.df %>%
-    filter(between(Time, 483, 497)) %>% # larger than actual constraint box to keep max number paths
-    mutate(Type = case_when(str_detect(Path, "Acc") == T ~ "Acceptable",
-                            .default = "Good"))
-  
-  unconformity.min <- unconformity.box %>%
-    group_by(Type, Path) %>%
-    filter(Temp == min(Temp)) %>%
-    ungroup() %>%
-    rename("Time.Unc" = "Time", "Temp.Unc" = "Temp") %>%
-    select(Path, Time.Unc)
-  
-  ### add pivot for predicted dates and GOF here
-  neo.path.seg <- full_join(paths.df, deposition.min, by = "Path") %>%
-    full_join(unconformity.min, by = "Path") %>%
-    mutate(Type = case_when(str_detect(Path, "Acc") == T ~ "Acceptable",
-                            .default = "Good")) %>%
-    group_by(Type, Path) %>%
-    filter(between(Time, Time.Unc, Time.Dep))
-  
-  neo.names <- colnames(neo.path.seg)
-  neo.path.seg <- neo.path.seg %>%
-    pivot_longer(cols = neo.names[c(which(str_starts(colnames(neo.path.seg), "Date")), which(str_starts(colnames(neo.path.seg), "GOF")))], 
-                 names_to = "Sample", values_to = "Prediction") %>%
-    mutate(Type.Prediction = case_when(str_detect(Sample, "GOF") ~ "GOF",
-                                       .default = "Date")) %>%
-    mutate(Sample = sub("Date.", "", Sample)) %>%
-    mutate(Sample = sub("GOF.", "", Sample)) %>%
-    pivot_wider(values_from = Prediction, names_from = Type.Prediction) %>%
-    group_by(Sample, .add = T)
-  
-  each_path <- neo.path.seg %>%
-    ungroup() %>%
-    group_by(Sample, Path) %>%
-    summarize(Type = unique(Type), Sample = unique(Sample), Path = unique(Path), Date = unique(Date), Com.GOF = unique(Com.GOF), GOF = unique(GOF), Time.Dep = unique(Time.Dep),
-              Time.Unc = unique(Time.Unc), Max.Temp = max(Temp),
-              Max.Time = Time[which(Temp == max(Temp))], .groups = "keep") %>%
-    mutate(Hft.File = hft.file)
-  
-  all.paths <- rbind(all.paths, each_path)
-  
-  all_paths <- each_path %>%
-    ungroup() %>%
-    group_by(Type, Sample) %>%
-    summarize(Type = unique(Type), Sample = unique(Sample), Mean_Date = mean(Date), Mean_Com.GOF = mean(Com.GOF), Max_Dep = max(Time.Dep), Min_Dep = min(Time.Dep),
-              Mean_Dep = mean(Time.Dep), Med_Dep = median(Time.Dep), Mean_Unc = mean(Time.Unc),
-              Max_Max = max(Max.Temp), Min_Max = min(Max.Temp), Med_Max = median(Max.Temp), 
-              Time_Max_Max = max(Max.Time), Time_Min_Max = min(Max.Time), Time_Med_Max = median(Max.Time),
-              .groups = "keep") %>%
-    mutate(Hft.File = hft.file)
-  
-  neo.heating.summary <- rbind(neo.heating.summary, all_paths)
-  
-  ### pre-deposition summary of when samples cool below PRZ and 20°C
-  cool.box <- paths.df %>%
-    filter(Time >= 949.7) %>%
-    mutate(Type = case_when(str_detect(Path, "Acc") == T ~ "Acceptable",
-                            .default = "Good"))
-  PRZ <- cool.box %>%
-    group_by(Type, Path) %>%
-    filter(Temp <= 140) %>%
-    filter(Time == max(Time)) %>%
-    ungroup() %>%
-    rename("Time.PRZ" = "Time", "Temp.PRZ" = "Temp") %>%
-    select(Path, Time.PRZ, Temp.PRZ)
-  
-  surface <- cool.box %>%
-    group_by(Type, Path) %>%
-    filter(Temp <= 20) %>%
-    filter(Time == max(Time)) %>%
-    ungroup() %>%
-    rename("Time.20" = "Time", "Temp.20" = "Temp") %>%
-    select(Path, Time.20, Temp.20)
-  
-  
-  pre.paths <- full_join(PRZ, surface, by = "Path") %>%
-    full_join(deposition.min, by = "Path") %>%
-    full_join(paths.df, by = "Path") %>%
-    mutate(Type = case_when(str_detect(Path, "Acc") == T ~ "Acceptable",
-                            .default = "Good")) %>%
-    group_by(Type, Path)
-  
-  pre.names <- colnames(pre.paths)
-  pre.paths <- pre.paths %>%
-    pivot_longer(cols = pre.names[c(which(str_starts(colnames(pre.paths), "Date")), which(str_starts(colnames(pre.paths), "GOF")))], 
-                 names_to = "Sample", values_to = "Prediction") %>%
-    mutate(Type.Prediction = case_when(str_detect(Sample, "GOF") ~ "GOF",
-                                       .default = "Date")) %>%
-    mutate(Sample = sub("Date.", "", Sample)) %>%
-    mutate(Sample = sub("GOF.", "", Sample)) %>%
-    pivot_wider(values_from = Prediction, names_from = Type.Prediction) %>%
-    group_by(Sample, .add = T)
-  
-  each_pre_path <- pre.paths %>%
-    summarize(Type = unique(Type), Sample = unique(Sample), Date = unique(Date), Com.GOF = unique(Com.GOF), Time.Dep = unique(Time.Dep),
-              Time.PRZ = unique(Time.PRZ), Temp.PRZ = unique(Temp.PRZ), Time.20 = unique(Time.20),
-              Temp.20 = unique(Temp.20), .groups = "keep") %>%
-    mutate(Hft.File = hft.file)
-  
-  all_pre_paths <- each_pre_path %>%
-    ungroup() %>%
-    group_by(Type, Sample) %>%
-    summarize(Type = unique(Type), Sample = unique(Sample), Mean_Date = mean(Date), 
-              Mean_Com.GOF = mean(Com.GOF), Mean_Dep = mean(Time.Dep), 
-              First_PRZ_Cool_Time = max(Time.PRZ), Last_PRZ_Cool_Time = min(Time.PRZ), 
-              Med_PRZ_Cool_Time = median(Time.PRZ), First_20_Cool_Time = max(Time.20), 
-              Last_20_Cool_Time = min(Time.20), Med_20_Cool_Time = median(Time.20),
-              First_PRZ_Cool_Temp = max(Temp.PRZ), Last_PRZ_Cool_Temp = min(Temp.PRZ), 
-              Med_PRZ_Cool_Temp = median(Temp.PRZ), First_20_Cool_Temp = max(Temp.20), 
-              Last_20_Cool_Temp = min(Temp.20), Med_20_Cool_Temp = median(Temp.20),
-              .groups = "keep") %>%
-    mutate(Hft.File = hft.file)
-  pre.deposition.summary <- rbind(pre.deposition.summary, all_pre_paths)
-  print(paste(i, samples, sep = " "))
-}
-tictoc::toc()
-```
-```{r merge model predictions with data}
-all_dates <- date.predictions %>%
-  separate_wider_delim(Sample, "_", names = c("Run", "Grain")) %>%
-  mutate(Grain = gsub("z", "", Grain)) %>%
-  mutate(across(c("Run", "Grain"), as.numeric)) %>%
-  mutate("Sample" = "BP22-02", .after = 2) %>%
-  full_join(ZHe_plot_data, by = c("Run", "Sample", "Grain"))
-
-neo.heating.summary <- neo.heating.summary %>%
-  separate_wider_delim(Sample, "_", names = c("Run", "Grain")) %>%
-  mutate(Grain = gsub("z", "", Grain)) %>%
-  mutate(across(c("Run", "Grain"), as.numeric)) %>%
-  mutate("Sample" = "BP22-02", .after = 2) %>%
-  full_join(ZHe_plot_data, by = c("Run", "Sample", "Grain"))
-
-pre.deposition.summary <- pre.deposition.summary %>%
-  separate_wider_delim(Sample, "_", names = c("Run", "Grain")) %>%
-  mutate(Grain = gsub("z", "", Grain)) %>%
-  mutate(across(c("Run", "Grain"), as.numeric)) %>%
-  mutate("Sample" = "BP22-02", .after = 2) %>%
-  full_join(ZHe_plot_data, by = c("Run", "Sample", "Grain"))
-
-all.paths <- all.paths %>%
-  separate_wider_delim(Sample, "_", names = c("Run", "Grain")) %>%
-  mutate(Grain = gsub("z", "", Grain)) %>%
-  mutate(across(c("Run", "Grain"), as.numeric)) %>%
-  mutate("Sample" = "BP22-02", .after = 2) %>%
-  full_join(ZHe_plot_data, by = c("Run", "Sample", "Grain"))
-```
-```{r plot pre-deposition cooling, echo = F}
-# plot shows that grains likely exhumed at variable times, though they can ALL exhume during Rigolet Orogeny
-dep.cooling <- pre.deposition.summary %>%
-  ungroup() %>%
-  pivot_longer(cols = c("First_PRZ_Cool_Time", "Last_PRZ_Cool_Time", "Med_PRZ_Cool_Time", "First_20_Cool_Time", "Last_20_Cool_Time", "Med_20_Cool_Time"),
-               values_to = "Time", names_to = "Time.ID") %>%
-  pivot_longer(cols = c("First_PRZ_Cool_Temp", "Last_PRZ_Cool_Temp", "Med_PRZ_Cool_Temp", "First_20_Cool_Temp", "Last_20_Cool_Temp", "Med_20_Cool_Temp"),
-               values_to = "Temp", names_to = "Temp.ID") %>%
-  filter((Time.ID == "First_PRZ_Cool_Time" & Temp.ID == "First_PRZ_Cool_Temp") |
-           (Time.ID == "Last_PRZ_Cool_Time" & Temp.ID == "Last_PRZ_Cool_Temp") |
-           (Time.ID == "Med_PRZ_Cool_Time" & Temp.ID == "Med_PRZ_Cool_Temp") |
-           (Time.ID == "First_20_Cool_Time" & Temp.ID == "First_20_Cool_Temp") |
-           (Time.ID == "Last_20_Cool_Time" & Temp.ID == "Last_20_Cool_Temp") |
-           (Time.ID == "Med_20_Cool_Time" & Temp.ID == "Med_20_Cool_Temp")) %>%
-  mutate(Threshold = case_when(str_detect(Time.ID, "PRZ") == T ~ "PRZ",
-                        .default = "Surface")) %>%
-  mutate(Cooling = case_when(str_detect(Time.ID, "First") ~ "Earliest",
-                              str_detect(Time.ID, "Med") ~ "Median",
-                              .default = "Latest")) #%>%
-  # select(!c("Time.ID", "Temp.ID")) %>%
-  # mutate(Age = as.factor(case_when(Upb.Date > 1250 ~ "Grenville Granite Rhyolite Province",
-  #                                  .default = "Grenville Orogeny")))
-#filter(name != "Med_Max")
-pre.dep.cooling.plot <- dep.cooling %>%
-  filter(Type == "Good") %>%
-  ggplot(aes(x = Time, y = Temp, color = ZHe.Report, shape = as.factor(Age_Group))) +
-  #geom_abline(slope = 1, intercept = 0, color = "black") +
-  #geom_hline(yintercept = 140, color = "black", linetype = "dashed") +
-  #geom_hline(yintercept = 220, color = "black", linetype = "dashed") +
-  geom_point() +
-  #geom_label() +
-  #geom_text(data = filter(temp.plot.heating, Sample == "2_114"), aes(x = Time, y = Temp,
-                                                                  #   label = Sample), color = "black", size = 0.3) +
-  scale_x_reverse(name = "Time (Ma)") +
-  scale_y_reverse(name = "Temp (°C)", limits = c(140, 0), breaks = seq(140, 0, -20)) +
-  scale_color_viridis(name = "Reported ZHe (Ma)") +
-  theme(panel.background = element_rect(fill = "transparent", colour = "transparent", linewidth = 1),
-        panel.border = element_rect(fill = NA, color = "black", linewidth = 1),
-        axis.ticks = element_line(colour = "black", linewidth = 0.5),
-        axis.ticks.length = unit(-0.2,"cm"),
-        axis.text = element_text(size = 9),
-        axis.title = element_text(size = 11),
-        plot.margin = grid::unit(c(0,0,0,0), "mm"),
-        legend.background = element_rect(fill = NA, colour = NA),
-        legend.key = element_blank(),
-        legend.position = "right",
-        legend.text = element_text(size = 9),
-        legend.title = element_text(size = 11),
-        plot.title = element_text(hjust = 0.5)) +
-  facet_grid(as.factor(Cooling) ~ as.factor(Threshold))
-pre.dep.cooling.plot
-#ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Model.Deposition.Time.pdf", pre.dep.cooling.plot, dpi = 300, height = 6.5, width = 6.5)
-```
-```{r plot max neoproterozic heating model compilation, echo = F}
-# all.paths.filtered <- all.paths %>%
-#   filter(Type == "Good" | Type == "Best") %>%
-#   ungroup() %>%
-#   mutate(Analysis = paste(Run, Sample, Grain, sep = "_")) %>%
-#   group_by(Analysis) %>%
-#   mutate(Family = case_when(all(Max.Temp < 140)  ~ "Required < PRZ",
-#                             all(Max.Temp < 220) & any(Max.Temp < 140) ~ "Required PRZ or <",
-#                             all(Max.Temp > 140) ~ "Required PRZ or >",
-#                             .default = "Permissive")) %>%
-#   mutate(Family_fac = factor(Family, levels = c("Permissive", "Required PRZ or >", "Required PRZ or <")))
-
-# 160-180 degrees C
-all.paths.filtered <- all.paths %>%
-  filter(Type == "Good" | Type == "Best") %>%
-  ungroup() %>%
-  mutate(Analysis = paste(Run, Sample, Grain, sep = "_")) %>%
-  group_by(Analysis) %>%
-  mutate(Family = case_when(all(Max.Temp < 170)  ~ "Required < 170",
-                            all(Max.Temp > 170) ~ "Required > 170",
-                            .default = "Permissive")) %>%
-  mutate(Family_fac = factor(Family, levels = c("Permissive", "Required > 170", "Required < 170")))
-
-filter.summary.Family <- all.paths.filtered %>%
-  ungroup() %>%
-  select(c(Analysis, Family)) %>%
-  distinct(Analysis, Family, .keep_all = T) %>%
-  count(Family) %>%
-  rename("nfam" = "n")
-
-all.paths.filtered <- all.paths.filtered %>%
-  left_join(filter.summary.Family, by = "Family")
-
-all.paths.plot <- all.paths.filtered %>%
-  # ungroup() %>%
-  # group_by(Analysis) %>%
-  # mutate(Time = case_when(all(Max.Time > 850) ~ "Required > 850",
-  #                         all(Max.Time < 850) ~ "Required < 850",
-  #                         .default = "Permissive")) %>%
-  group_by(Family, .add = TRUE) %>%
-  ggplot(aes(x = Max.Time, y = Max.Temp, color = ZHe.Report)) +
-  #annotate("rect", xmin = 1000, xmax = 700, ymin = 130, ymax = 250, alpha = 0.1, fill = "orange") +
-  #annotate("rect", xmin = 1000, xmax = 700, ymin = 172.5, ymax = 182.5, alpha = 0.1, fill = "black") +
-  geom_hline(yintercept = 140, color = "black", linetype = "dashed") +
-  geom_hline(yintercept = 220, color = "black", linetype = "dashed") +
-  geom_point() +
-  scale_x_reverse(name = "Time (Ma)") +
-  scale_y_reverse(name = "Temp (°C)", limits = c(300, 0), breaks = seq(300, 0, -50)) +
-  #geom_text(aes(x = 800, y = 300, label = paste("n =", nfam, "grains", sep = " ")), color = "black", size = 2) +
-  scale_color_viridis(name = "ZHe Date (Ma)", limits = c(375, 1400)) +
-  ggtitle("Modeled Maximum Neoproterozoic Temperature and Time") +
-  theme(panel.background = element_rect(fill = "transparent", colour = "transparent", linewidth = 1),
-        panel.border = element_rect(fill = NA, color = "black", linewidth = 1),
-        axis.ticks = element_line(colour = "black", linewidth = 0.5),
-        axis.ticks.length = unit(-0.2,"cm"),
-        axis.text = element_text(size = 9),
-        axis.title = element_text(size = 11),
-        plot.margin = grid::unit(c(0,0,0,0), "mm"),
-        legend.background = element_rect(fill = NA, colour = NA),
-        legend.key = element_blank(),
-        legend.position = "bottom",
-        legend.text = element_text(size = 9),
-        legend.title = element_text(size = 11),
-        plot.title = element_text(hjust = 0.5)) +
-  facet_wrap(vars(Family_fac))
-all.paths.plot
-
-ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Model.Max.Heating.Family.pdf", all.paths.plot, dpi = 300, height = 6.5, width = 6.5)
-```
-```{r test}
-GMCR <- all_data %>%
-  filter(Pb207.Pb206_Date < 1300)
-```
-```{r plot max neoproterozic heating grouped by type of heating, echo = F}
-max.max.temp <- all.paths.filtered %>%
-  group_by(Analysis) %>%
-  summarise(across(Max.Temp, max)) %>%
-  rename("Max.Max.Temp" = "Max.Temp")
-
-min.max.temp <- all.paths.filtered %>%
-  group_by(Analysis) %>%
-  summarise(across(Max.Temp, min)) %>%
-  rename("Min.Max.Temp" = "Max.Temp")
-
-all.paths.max <- all.paths.filtered %>%
-  left_join(max.max.temp, by = "Analysis") %>%
-  left_join(min.max.temp, by = "Analysis")
-
-neo.heat.permissive <- all.paths.max %>%  
-  ungroup() %>% # have to do this to use fct_reorder
-  #filter(Family == "Permissive") %>%
-  #filter(between(Max.Temp, 130, 250)) %>% # only PRZ
-  arrange(Max.Max.Temp) %>%
-  mutate(Analysis_fac = fct_reorder(Analysis, Max.Max.Temp)) %>%
-  ggplot(aes(x = Max.Time, y = Max.Temp, color = GOF, shape = FT.Applied.Extra)) +
-  #annotate("rect", xmin = 1000, xmax = 700, ymin = 130, ymax = 250, alpha = 0.1, fill = "orange") +
-  #annotate("rect", xmin = 1000, xmax = 700, ymin = 172.5, ymax = 182.5, alpha = 0.1, fill = "black") +
-  geom_hline(yintercept = 140, color = "black", linetype = "dashed") +
-  geom_hline(yintercept = 220, color = "black", linetype = "dashed") +
-  geom_point() +
-  scale_x_reverse(name = "Time (Ma)") +
-  scale_y_reverse(name = "Temp (°C)", limits = c(300, 0), breaks = seq(300, 0, -50)) +
-  geom_text(aes(x = 600, y = 250, label = paste(ZHe.Report, "±", ZHe.Report.1s, "Ma", sep = " ")), color = "black", size = 2) +
-  scale_color_viridis(name = "GOF", limits = c(0.5, 1), na.value = "gray") +
-  scale_shape_manual(values = c("None" = 15, "Conventional" = 16, "Since Deposition Only" = 17), name = "FT Applied") +
-  #ggtitle("Modeled Maximum Neoproterozoic Temperature and Time") +
-  theme(panel.background = element_rect(fill = "transparent", colour = "transparent", linewidth = 1),
-        panel.border = element_rect(fill = NA, color = "black", linewidth = 1),
-        axis.ticks = element_line(colour = "black", linewidth = 0.5),
-        axis.ticks.length = unit(-0.2,"cm"),
-        axis.text = element_text(size = 9),
-        axis.title = element_text(size = 11),
-        plot.margin = grid::unit(c(0,0,0,0), "mm"),
-        legend.background = element_rect(fill = NA, colour = NA),
-        legend.key = element_blank(),
-        legend.position = "bottom",
-        legend.text = element_text(size = 9),
-        legend.title = element_text(size = 11),
-        plot.title = element_text(hjust = 0.5)) +
-  facet_wrap(vars(Analysis_fac), ncol = 3, dir = "h")
-neo.heat.permissive
-ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Model.Max.Heating.Permissive.PRZ.pdf", neo.heat.permissive, dpi = 300, height = 34, width = 6.5)
-
-
-neo.heat.cool <- all.paths.max %>%  
-  ungroup() %>% # have to do this to use fct_reorder
-  filter(Family == "Required PRZ or <") %>%
-  #filter(between(Max.Temp, 130, 250)) %>% # only PRZ
-  arrange(Max.Max.Temp) %>%
-  mutate(Analysis_fac = fct_reorder(Analysis, Max.Max.Temp)) %>%
-  ggplot(aes(x = Max.Time, y = Max.Temp, color = GOF, shape = FT.Applied.Extra)) +
-  #annotate("rect", xmin = 1000, xmax = 700, ymin = 130, ymax = 250, alpha = 0.1, fill = "orange") +
-  #annotate("rect", xmin = 1000, xmax = 700, ymin = 172.5, ymax = 182.5, alpha = 0.1, fill = "black") +
-  geom_hline(yintercept = 140, color = "black", linetype = "dashed") +
-  geom_hline(yintercept = 220, color = "black", linetype = "dashed") +
-  geom_hline(aes(yintercept = Max.Max.Temp), color = "gray", linetype = "solid") +
-  geom_point() +
-  scale_x_reverse(name = "Time (Ma)") +
-  scale_y_reverse(name = "Temp (°C)", limits = c(300, 0), breaks = seq(300, 0, -50)) +
-  geom_text(aes(x = 600, y = 250, label = paste(ZHe.Report, "±", ZHe.Report.1s, "Ma", sep = " ")), color = "black", size = 3) +
-  geom_text(aes(x = 600, y = 175, label = paste(round(Max.Max.Temp, 0), "°C", sep = " ")), color = "gray", size = 3) +
-  #scale_color_viridis(name = "ZHe Date (Ma)", limits = c(375, 1400)) +
-  scale_color_viridis(name = "GOF", limits = c(0.5, 1), na.value = "gray") +
-  scale_shape_manual(values = c("None" = 15, "Conventional" = 16, "Since Deposition Only" = 17), name = "FT Applied") +
-  #ggtitle("Modeled Maximum Neoproterozoic Temperature and Time") +
-  theme(panel.background = element_rect(fill = "transparent", colour = "transparent", linewidth = 1),
-        panel.border = element_rect(fill = NA, color = "black", linewidth = 1),
-        axis.ticks = element_line(colour = "black", linewidth = 0.5),
-        axis.ticks.length = unit(-0.2,"cm"),
-        axis.text = element_text(size = 9),
-        axis.title = element_text(size = 11),
-        plot.margin = grid::unit(c(0,0,0,0), "mm"),
-        legend.background = element_rect(fill = NA, colour = NA),
-        legend.key = element_blank(),
-        legend.position = "bottom",
-        legend.text = element_text(size = 9),
-        legend.title = element_text(size = 11),
-        plot.title = element_text(hjust = 0.5)) +
-  facet_wrap(~Analysis_fac, ncol = 3, dir = "h")
-neo.heat.cool
-ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Model.Max.Heating.Cool.PRZ.pdf", neo.heat.cool, dpi = 300, height = 5.3, width = 6.5)
-
-neo.heat.hot <- all.paths.max %>%  
-  ungroup() %>% # have to do this to use fct_reorder
-  filter(Family == "Required PRZ or >") %>%
-  #filter(between(Max.Temp, 130, 250)) %>% # only PRZ
-  arrange(Min.Max.Temp) %>%
-  mutate(Analysis_fac = fct_reorder(Analysis, Min.Max.Temp)) %>%
-  ggplot(aes(x = Max.Time, y = Max.Temp, color = GOF, shape = FT.Applied.Extra)) +
-  #annotate("rect", xmin = 1000, xmax = 700, ymin = 130, ymax = 250, alpha = 0.1, fill = "orange") +
-  #annotate("rect", xmin = 1000, xmax = 700, ymin = 172.5, ymax = 182.5, alpha = 0.1, fill = "black") +
-  geom_hline(yintercept = 140, color = "black", linetype = "dashed") +
-  geom_hline(yintercept = 220, color = "black", linetype = "dashed") +
-  geom_hline(aes(yintercept = Min.Max.Temp), color = "gray", linetype = "solid") +
-  geom_point() +
-  scale_x_reverse(name = "Time (Ma)") +
-  scale_y_reverse(name = "Temp (°C)", limits = c(300, 0), breaks = seq(300, 0, -50)) +
-  geom_text(aes(x = 600, y = 250, label = paste(ZHe.Report, "±", ZHe.Report.1s, "Ma", sep = " ")), color = "black", size = 3) +
-  geom_text(aes(x = 600, y = 50, label = paste(round(Min.Max.Temp,0) , "°C", sep = " ")), color = "gray", size = 3) +
-  scale_color_viridis(name = "GOF", limits = c(0.5, 1), na.value = "gray") +
-  scale_shape_manual(values = c("None" = 15, "Conventional" = 16, "Since Deposition Only" = 17), name = "FT Applied") +
-  #ggtitle("Modeled Maximum Neoproterozoic Temperature and Time") +
-  theme(panel.background = element_rect(fill = "transparent", colour = "transparent", linewidth = 1),
-        panel.border = element_rect(fill = NA, color = "black", linewidth = 1),
-        axis.ticks = element_line(colour = "black", linewidth = 0.5),
-        axis.ticks.length = unit(-0.2,"cm"),
-        axis.text = element_text(size = 9),
-        axis.title = element_text(size = 11),
-        plot.margin = grid::unit(c(0,0,0,0), "mm"),
-        legend.background = element_rect(fill = NA, colour = NA),
-        legend.key = element_blank(),
-        legend.position = "bottom",
-        legend.text = element_text(size = 9),
-        legend.title = element_text(size = 11),
-        plot.title = element_text(hjust = 0.5)) +
-  facet_wrap(~Analysis_fac, ncol = 3, dir = "h")
-neo.heat.hot
-ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Model.Max.Heating.Hot.PRZ.pdf", neo.heat.hot, dpi = 300, height = 8.2, width = 6.5)
-```
-```{r REVISIT plot max neoproterozic heating model compilation grouped, echo = F}
-paths.limited <- all.paths.filtered #%>%  
-  #group_by(Family_fac, .add = TRUE) %>%
-  #arrange(Family_fac) %>%
-  #filter(between(Max.Temp, 130, 250))
-n_family <- paths.limited %>%
-  ungroup() %>%
-  count(Family_fac)
-
-all.paths.overlay <- paths.filtered %>%
-  ggplot() +
-  #annotate("rect", xmin = 1000, xmax = 700, ymin = 130, ymax = 250, alpha = 0.1, fill = "orange") +
-  #annotate("rect", xmin = 1000, xmax = 700, ymin = 172.5, ymax = 182.5, alpha = 0.1, fill = "black") +
-  geom_hline(yintercept = 140, color = "black", linetype = "dashed", alpha = 1) +
-  geom_hline(yintercept = 220, color = "black", linetype = "dashed", alpha = 1) +
-  #stat_density_2d(aes(fill = ..level..), geom = "polygon", alpha = 0.5) +
-  stat_density_2d(aes(x = Max.Time, y = Max.Temp, fill = ..level..), contour_var = "ndensity",
-                  filter(paths.limited, Family_fac == "Permissive"),
-                  geom = "polygon",
-                  alpha = 0.3) +
-  scale_fill_gradientn(colours = c("#2CA02C","white")) +
-  labs(fill = paste(n_family$Family_fac[1], paste("n = ", n_family$n[1]), sep = "\n")) +
-  new_scale_fill() +
-  stat_density_2d(aes(x = Max.Time, y = Max.Temp, fill = ..level..), contour_var = "ndensity",
-                  filter(paths.limited, Family_fac == "Required PRZ or <"),
-                  geom = "polygon",
-                  alpha = 0.3) +
-  scale_fill_gradientn(colours = c("#1F77B4","white")) +
-  labs(fill = paste(n_family$Family_fac[3], paste("n = ", n_family$n[3]), sep = "\n")) +
-  new_scale_fill() +
-  stat_density_2d(aes(x = Max.Time, y = Max.Temp, fill = ..level..), contour_var = "ndensity",
-                  filter(paths.limited, Family_fac == "Required PRZ or >"),
-                  geom = "polygon",
-                  alpha = 0.3) +
-  scale_fill_gradientn(colours = c("#E73F74","white")) +
-  labs(fill = paste(n_family$Family_fac[2], paste("n = ", n_family$n[2]), sep = "\n")) +
-  annotate("rect", xmax = 993.15, xmin = 730, ymin = 140, ymax = 220, color = "black", fill = "transparent") +
-  annotate("rect", xmax = 993.15, xmin = 949.7, ymin = 0, ymax = 20, color = "blue", linetype = "dashed", fill = "transparent") +
-  annotate("rect", xmax = 993, xmin = 700, ymin = 130, ymax = 250, color = "orange", linetype = "dashed", fill = "transparent") +
-  annotate("rect", xmax = 700, xmin = 487, ymin = 0, ymax = 40, color = "black", linetype = "dashed", fill = "transparent") +
-  #stat_density_2d() +
-  #geom_point(shape = 16, size = 0.5, alpha = 1) +
-  #scale_colour_manual(values = c("Permissive" = "green", "Required PRZ or >" = "red", "Required PRZ or <" = "blue")) +
-  scale_x_reverse(name = "Time (Ma)", limits = c(1050, 430), breaks = seq(1000, 500, -100)) +
-  scale_y_reverse(name = "Temp (°C)", limits = c(300, 0), breaks = seq(300, 0, -20)) +
-  #geom_text(aes(x = 800, y = 300, label = paste("n =", nfam, "grains", sep = " ")), color = "black", size = 2) +
-  #scale_fill_viridis(name = "Density") +
-  #ggtitle("Modeled Maximum Neoproterozoic Temperature and Time") +
-  theme(panel.background = element_rect(fill = "transparent", colour = "transparent", linewidth = 1),
-        panel.border = element_rect(fill = NA, color = "black", linewidth = 1),
-        axis.ticks = element_line(colour = "black", linewidth = 0.5),
-        axis.ticks.length = unit(-0.2,"cm"),
-        axis.text = element_text(size = 9),
-        axis.title = element_text(size = 11),
-        plot.margin = grid::unit(c(0,0,0,0), "mm"),
-        legend.background = element_rect(fill = NA, colour = NA),
-        legend.key = element_blank(),
-        legend.position = "right",
-        legend.text = element_text(size = 9),
-        legend.title = element_text(size = 11),
-        plot.title = element_text(hjust = 0.5)) #+
-  #facet_wrap(vars(Family_fac))
-all.paths.overlay
-ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Model.Max.Heating.Overlay.pdf", all.paths.overlay, dpi = 300, height = 5, width = 6.5)
-```
-```{r plot max neoproterozic heating model compilation 160-180, echo = F}
-paths.limited <- all.paths.filtered
-
-all.paths.overlay <- paths.limited %>%
-  ggplot() +
-  #annotate("rect", xmin = 1000, xmax = 700, ymin = 130, ymax = 250, alpha = 0.1, fill = "orange") +
-  #annotate("rect", xmin = 1000, xmax = 700, ymin = 172.5, ymax = 182.5, alpha = 0.1, fill = "black") +
-  geom_hline(yintercept = 140, color = "black", linetype = "dashed", alpha = 1) +
-  geom_hline(yintercept = 220, color = "black", linetype = "dashed", alpha = 1) +
-  #stat_density_2d(aes(fill = ..level..), geom = "polygon", alpha = 0.5) +
-  stat_density_2d(aes(x = Max.Time, y = Max.Temp, fill = ..level..), contour_var = "ndensity",
-                  geom = "polygon",
-                  alpha = 1) +
-  scale_fill_gradientn(colours = c("#6699CC","white")) +
-  labs(fill = paste("Permissive", paste("n = ", 48), sep = "\n")) +
-  annotate("rect", xmax = 993.15, xmin = 730, ymin = 140, ymax = 220, color = "black", fill = "transparent") +
-  annotate("rect", xmax = 993.15, xmin = 949.7, ymin = 0, ymax = 20, color = "blue", linetype = "dashed", fill = "transparent") +
-  annotate("rect", xmax = 993, xmin = 700, ymin = 160, ymax = 180, color = "orange", linetype = "dashed", fill = "transparent") +
-  annotate("rect", xmax = 700, xmin = 487, ymin = 0, ymax = 40, color = "black", linetype = "dashed", fill = "transparent") +
-  #stat_density_2d() +
-  #geom_point(shape = 16, size = 0.5, alpha = 1) +
-  #scale_colour_manual(values = c("Permissive" = "green", "Required PRZ or >" = "red", "Required PRZ or <" = "blue")) +
-  scale_x_reverse(name = "Time (Ma)", limits = c(1050, 430), breaks = seq(1000, 500, -100)) +
-  scale_y_reverse(name = "Temp (°C)", limits = c(300, 0), breaks = seq(300, 0, -20)) +
-  #geom_text(aes(x = 800, y = 300, label = paste("n =", nfam, "grains", sep = " ")), color = "black", size = 2) +
-  #scale_fill_viridis(name = "Density") +
-  #ggtitle("Modeled Maximum Neoproterozoic Temperature and Time") +
-  theme(panel.background = element_rect(fill = "transparent", colour = "transparent", linewidth = 1),
-        panel.border = element_rect(fill = NA, color = "black", linewidth = 1),
-        axis.ticks = element_line(colour = "black", linewidth = 0.5),
-        axis.ticks.length = unit(-0.2,"cm"),
-        axis.text = element_text(size = 9),
-        axis.title = element_text(size = 11),
-        plot.margin = grid::unit(c(0,0,0,0), "mm"),
-        legend.background = element_rect(fill = NA, colour = NA),
-        legend.key = element_blank(),
-        legend.position = "right",
-        legend.text = element_text(size = 9),
-        legend.title = element_text(size = 11),
-        plot.title = element_text(hjust = 0.5)) #+
-  #facet_wrap(vars(Family_fac))
-all.paths.overlay
-ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Model.Max.Heating.Overlay.blue.pdf", all.paths.overlay, dpi = 300, height = 5, width = 6.5)
+#ggsave("/Users/barrapeak/Dropbox/Thermo-Detrital/2025/Manuscript/R_Figure_Outputs/R.Model.Max.Heating.Hot.pdf", all.paths.Hot, dpi = 300, width = 3.25, height = 7)
 ```
