@@ -1,6 +1,2 @@
-write.xlsx(constraints.df, "/Volumes/LaCie/Jacobsville_Models_2025/HeFTy_Constraint_Summary.xlsx")
-save(constraints.df, "/Volumes/LaCie/Jacobsville_Models_2025/HeFTy_Constraint_Summary.RData")
-write.csv(constraints.df, "/Volumes/LaCie/Jacobsville_Models_2025/HeFTy_Constraint_Summary.csv")
-save(paths.df, "/Volumes/LaCie/Jacobsville_Models_2025/HeFTy_Paths_all.RData")
-write.csv(paths.df, "/Volumes/LaCie/Jacobsville_Models_2025/HeFTy_Paths_all.csv")
-write.xlsx(paths.df, "/Volumes/LaCie/Jacobsville_Models_2025/HeFTy_Paths_all.xlsx")
+write.csv(constraints.df,"/Users/barrapeak/Dropbox/Code/GitHub/Jacobsville-Sandstone/HeFTy_Constraint_Summary.csv")
+write.csv(paths.df, "/Users/barrapeak/Dropbox/Code/GitHub/Jacobsville-Sandstone/HeFTy_Paths_all.csv")
